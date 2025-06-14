@@ -11,46 +11,60 @@ import os
 # Set up logging for this module
 logger = logging.getLogger(__name__)
 
+SYSTEM_PROMPT = """
+You are a character in a discord discussion of users and other bots. The bots are sometimes referred to as ghosts since they may be modelled based on other users (or purely fictional). 
+
+Instructions:
+* You always see the whole conversation (or at least the 50 last messages)
+* Respond to the conversation within your character, which is described below.
+* Do engage with the conversation and respond to the user as well as other ghosts and other participants.
+* It is the time for you to speak. Only respond with one message at a time. Do not prefix your message with your name, speak directly.
+* You can use emojis and markdown to make your messages more engaging, but first of all follow your character and context.
+* You can use the @username to address other users.
+"""
+
 class Ghost(BaseModel):
     """A digital ghost with LLM capabilities"""
     
-    name: str = Field(..., description="Display name of the ghost")
-    discord_handle: str = Field(..., description="Handle used to summon this ghost (e.g., 'tomas')")
-    discord_avatar: HttpUrl = Field(..., description="Avatar URL for webhook display")
-    discord_username: str = Field(..., description="Username displayed in Discord")
+    name: str = Field(..., description="Display name of the ghost (also used as handle and username)")
+    discord_avatar: Optional[HttpUrl] = Field(default=None, description="Avatar URL for webhook display (None uses default)")
     description: str = Field(..., description="Brief description of the ghost")
     instructions: str = Field(..., description="System prompt/personality instructions for the LLM")
-    model: str = Field(default="gpt-4o-mini", description="LLM model to use")
-    temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="LLM temperature parameter")
+    model: str = Field(default="gpt-4.1-mini", description="LLM model to use")
+    temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0, description="LLM temperature parameter (None uses model default)")
     
     class Config:
         # Allow extra fields for future extensibility
-        extra = "allow"
+        extra = "forbid"
     
-    @field_validator('discord_handle')
+    @field_validator('name')
     @classmethod
-    def handle_must_be_lowercase(cls, v):
-        """Ensure handle is lowercase for consistent matching"""
-        return v.lower().strip()
+    def name_must_be_clean(cls, v):
+        """Ensure name is clean for use as handle"""
+        return v.strip()
     
     @field_validator('temperature')
     @classmethod
     def temperature_reasonable_range(cls, v):
         """Ensure temperature is in a reasonable range"""
-        if v < 0 or v > 2:
+        if v is not None and (v < 0 or v > 2):
             raise ValueError('Temperature must be between 0 and 2')
         return v
     
     def get_aliases(self) -> List[str]:
         """Get all possible aliases for this ghost"""
-        aliases = [self.discord_handle]
+        name_lower = self.name.lower()
+        aliases = [name_lower]
         
         # Add variations of the name
-        name_lower = self.name.lower()
         if 'ghost' in name_lower:
             base_name = name_lower.replace('ghost', '').replace("'s", "").strip()
             if base_name:
                 aliases.append(base_name)
+        
+        # Add just the first word of the name
+        first_word = name_lower.split()[0] if name_lower.split() else name_lower
+        aliases.append(first_word)
         
         return list(set(aliases))  # Remove duplicates
     
@@ -70,19 +84,25 @@ class Ghost(BaseModel):
         try:
             # Prepare the full message list with system prompt
             full_messages = [
-                {"role": "system", "content": self.instructions}
+                {"role": "system", "content": f"{SYSTEM_PROMPT}\n\n{self.instructions}"}
             ] + messages
             
             logger.debug(f"💭 {self.name} LLM input: {len(full_messages)} total messages, temp={self.temperature}")
             
+            # Prepare completion kwargs
+            completion_kwargs = {
+                "model": self.model,
+                "messages": full_messages,
+                "max_tokens": max_tokens,
+                "timeout": 30  # 30 second timeout
+            }
+            
+            # Only include temperature if it's explicitly set
+            if self.temperature is not None:
+                completion_kwargs["temperature"] = self.temperature
+            
             # Call litellm async
-            response = await acompletion(
-                model=self.model,
-                messages=full_messages,
-                temperature=self.temperature,
-                max_tokens=max_tokens,
-                timeout=30  # 30 second timeout
-            )
+            response = await acompletion(**completion_kwargs)
             
             response_text = response.choices[0].message.content.strip()
             logger.info(f"✅ {self.name} LLM response received: {len(response_text)} characters")
@@ -120,14 +140,14 @@ class Ghost(BaseModel):
             # Check if this message is from the current ghost (via webhook)
             is_current_ghost = (
                 hasattr(msg, 'webhook_id') and msg.webhook_id and 
-                hasattr(msg.author, 'name') and msg.author.name == self.discord_username
+                hasattr(msg.author, 'name') and msg.author.name == self.name
             )
             
             # Check if this message is from another ghost (webhook with different name)
             is_other_ghost = (
                 hasattr(msg, 'webhook_id') and msg.webhook_id and 
-                hasattr(msg.author, 'name') and msg.author.name != self.discord_username and
-                msg.author.name.endswith('*')  # Our ghosts end with *
+                hasattr(msg.author, 'name') and msg.author.name != self.name and
+                hasattr(msg.author, 'discriminator') and msg.author.discriminator == '0000'  # Webhook messages have discriminator 0000
             )
             
             # Check if this is a regular bot message (not webhook)
@@ -171,7 +191,7 @@ class Ghost(BaseModel):
         return limited_messages
     
     def __str__(self) -> str:
-        return f"Ghost({self.name}, handle='{self.discord_handle}', model={self.model})"
+        return f"Ghost({self.name}, model={self.model})"
 
 
 def load_ghosts_from_directory(directory: str) -> Dict[str, Ghost]:
@@ -182,7 +202,7 @@ def load_ghosts_from_directory(directory: str) -> Dict[str, Ghost]:
         directory: Path to directory containing ghost config files
         
     Returns:
-        Dictionary mapping discord_handle to Ghost instance
+        Dictionary mapping names to Ghost instance
     """
     logger.info(f"📁 Loading ghosts from directory: {directory}")
     
@@ -202,8 +222,9 @@ def load_ghosts_from_directory(directory: str) -> Dict[str, Ghost]:
                 logger.debug(f"🔍 Processing ghost file: {file_path}")
                 ghost = load_ghost_from_file(file_path)
                 if ghost:
-                    ghosts[ghost.discord_handle] = ghost
-                    logger.info(f"✅ Loaded ghost: {ghost.name} (@{ghost.discord_handle}) using {ghost.model}")
+                    ghost_key = ghost.name.lower()
+                    ghosts[ghost_key] = ghost
+                    logger.info(f"✅ Loaded ghost: {ghost.name} using {ghost.model}")
                 else:
                     logger.warning(f"⚠️  Failed to create ghost from {file_path}")
             except Exception as e:
@@ -239,7 +260,7 @@ def load_ghost_from_file(file_path: Path) -> Optional[Ghost]:
         
         # Validate and create Ghost instance
         ghost = Ghost(**data)
-        logger.debug(f"✅ Created ghost instance: {ghost.name} with handle '{ghost.discord_handle}'")
+        logger.debug(f"✅ Created ghost instance: {ghost.name}")
         return ghost
         
     except Exception as e:

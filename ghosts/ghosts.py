@@ -98,8 +98,8 @@ async def on_ready():
     
     if GHOSTS:
         logger.info(f'🎭 Ghost system ready with {len(GHOSTS)} ghosts:')
-        for handle, ghost in GHOSTS.items():
-            logger.info(f'  👻 {ghost.name} (@{handle}) using {ghost.model}')
+        for ghost_key, ghost in GHOSTS.items():
+            logger.info(f'  👻 {ghost.name} using {ghost.model}')
     else:
         logger.warning('⚠️  No ghosts loaded! Check your bots directory.')
     
@@ -170,11 +170,18 @@ async def handle_ghost_response(message: discord.Message, ghost: Ghost):
             if webhook:
                 try:
                     logger.debug(f"📤 {ghost.name} sending response via webhook")
-                    await webhook.send(
-                        content=response,
-                        username=ghost.discord_username,
-                        avatar_url=str(ghost.discord_avatar)
-                    )
+                    
+                    # Prepare webhook kwargs
+                    webhook_kwargs = {
+                        "content": response,
+                        "username": ghost.name
+                    }
+                    
+                    # Add avatar if specified
+                    if ghost.discord_avatar:
+                        webhook_kwargs["avatar_url"] = str(ghost.discord_avatar)
+                    
+                    await webhook.send(**webhook_kwargs)
                     
                     elapsed = asyncio.get_event_loop().time() - start_time
                     logger.info(f"✅ {ghost.name} response sent via webhook in {elapsed:.2f}s")
@@ -185,7 +192,7 @@ async def handle_ghost_response(message: discord.Message, ghost: Ghost):
             
             # Fallback to regular reply
             logger.debug(f"🔄 {ghost.name} falling back to regular reply")
-            await message.reply(f"**{ghost.discord_username}**: {response}")
+            await message.reply(f"**{ghost.name}**: {response}")
             
             elapsed = asyncio.get_event_loop().time() - start_time
             logger.info(f"✅ {ghost.name} response sent via fallback in {elapsed:.2f}s")
@@ -211,11 +218,10 @@ async def list_ghosts(ctx):
     
     message = "👻 **Loaded Ghosts:**\n\n"
     
-    for handle, ghost in GHOSTS.items():
+    for ghost_key, ghost in GHOSTS.items():
         aliases = ghost.get_aliases()
         alias_str = ', '.join([f"`@{alias}`" for alias in aliases])
-        message += f"**{ghost.discord_username}**\n"
-        message += f"  • Handle: `@{handle}`\n"
+        message += f"**{ghost.name}**\n"
         message += f"  • Aliases: {alias_str}\n"
         message += f"  • Model: `{ghost.model}` (temp: {ghost.temperature})\n"
         message += f"  • Description: {ghost.description}\n\n"
@@ -277,7 +283,8 @@ async def test_ghost(ctx, ghost_handle: str = None):
     
     # Select ghost
     if ghost_handle:
-        ghost = GHOSTS.get(ghost_handle.lower())
+        ghost_key = ghost_handle.lower()
+        ghost = GHOSTS.get(ghost_key)
         if not ghost:
             available = ', '.join(GHOSTS.keys())
             await ctx.send(f"❌ Ghost '{ghost_handle}' not found! Available: {available}")
@@ -297,7 +304,7 @@ async def test_ghost(ctx, ghost_handle: str = None):
             
             response = await ghost.call_llm(test_messages, max_tokens=200)
             
-            await ctx.send(f"✅ **Test successful for {ghost.discord_username}:**\n\n{response}")
+            await ctx.send(f"✅ **Test successful for {ghost.name}:**\n\n{response}")
             
     except Exception as e:
         await ctx.send(f"❌ **Test failed for {ghost.name}:** {str(e)}")

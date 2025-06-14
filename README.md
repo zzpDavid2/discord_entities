@@ -96,32 +96,6 @@ python run_ghosts.py
 
 Create ghost personality files in the `bots/` directory:
 
-**Example: `bots/mybot.yaml`**
-```yaml
-name: "My Ghost"
-discord_handle: "mybot" 
-discord_avatar: "https://avatar.iran.liara.run/username?username=M+G"
-discord_username: "👻 MyBot*"
-description: "A helpful ghost with a quirky personality"
-instructions: "You are a helpful ghost who loves to solve problems with creative solutions..."
-model: "gpt-4o-mini"
-temperature: 0.7
-```
-
-**Example: `bots/otherbot.json`**
-```json
-{
-    "name": "Other Ghost",
-    "discord_handle": "other",
-    "discord_avatar": "https://avatar.iran.liara.run/username?username=O+G", 
-    "discord_username": "🤖 Other*",
-    "description": "A technical ghost",
-    "instructions": "You are a technical ghost who speaks precisely...",
-    "model": "gpt-4o-mini",
-    "temperature": 0.5
-}
-```
-
 #### LLM Setup
 
 Add API keys to your `.env` file:
