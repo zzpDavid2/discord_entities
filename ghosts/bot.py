@@ -1,10 +1,12 @@
-import discord
-from discord.ext import commands
-import os
 import asyncio
 import logging
+import os
 import random
 from typing import Dict, List, Optional
+
+import discord
+from discord.ext import commands
+
 from .ghost_group import GhostGroup
 
 # Set up logging for this module
@@ -42,7 +44,10 @@ class GhostBot(commands.Bot):
         self.add_listener(self.on_message, "on_message")
         logger.debug("Event handlers registered")
 
-        self.add_command(commands.Command(self.cmd_speak, name="speak"))
+        # Register commands
+        self.add_command(
+            commands.Command(self.cmd_speak, name="speak", rest_is_raw=True)
+        )
         self.add_command(commands.Command(self.cmd_list, name="list"))
         self.add_command(commands.Command(self.cmd_reload, name="reload"))
         self.add_command(commands.Command(self.cmd_status, name="status"))
@@ -114,10 +119,15 @@ class GhostBot(commands.Bot):
 
         logger.info("🚀 Bot is ready to receive ghost summons!")
 
-    async def activate_ghost(self, ghost, message: Optional[discord.Message] = None, prompt: Optional[str] = None):
+    async def activate_ghost(
+        self,
+        ghost,
+        message: Optional[discord.Message] = None,
+        prompt: Optional[str] = None,
+    ):
         """
         Activate a ghost to speak, optionally in response to a message
-        
+
         Args:
             ghost: The ghost to activate
             message: Optional message to reply to
@@ -154,10 +164,15 @@ class GhostBot(commands.Bot):
 
                     if webhook:
                         try:
-                            logger.debug(f"📤 {ghost.name} sending response via webhook")
+                            logger.debug(
+                                f"📤 {ghost.name} sending response via webhook"
+                            )
 
                             # Prepare webhook kwargs
-                            webhook_kwargs = {"content": response, "username": ghost.name}
+                            webhook_kwargs = {
+                                "content": response,
+                                "username": ghost.name,
+                            }
 
                             # Add avatar if specified
                             if ghost.discord_avatar:
@@ -175,7 +190,8 @@ class GhostBot(commands.Bot):
                                 f"❌ {ghost.name} webhook error: {type(e).__name__}: {e}"
                             )
                             logger.debug(
-                                f"🔍 Webhook error details for {ghost.name}", exc_info=True
+                                f"🔍 Webhook error details for {ghost.name}",
+                                exc_info=True,
                             )
 
                     # Fallback to regular reply
@@ -214,7 +230,10 @@ class GhostBot(commands.Bot):
     async def on_message(self, message):
         """Handle incoming messages"""
         # Add message ID tracking to prevent duplicate processing
-        if hasattr(self, '_last_processed_message') and message.id == self._last_processed_message:
+        if (
+            hasattr(self, "_last_processed_message")
+            and message.id == self._last_processed_message
+        ):
             logger.debug(f"Skipping duplicate message {message.id}")
             return
         self._last_processed_message = message.id
@@ -385,35 +404,42 @@ class GhostBot(commands.Bot):
     async def cmd_commands(self, ctx, *args):
         """List all available commands"""
         message = "👻 **Available Commands:**\n\n"
-        
+
         # List all commands with their descriptions
         message += "**Ghost Interaction:**\n"
         message += "• `@ghost_name message` - Summon a specific ghost\n"
         message += "• `@bot_name message` - Summon first available ghost\n"
-        message += "• `!speak ghost1 ghost2 ...` - Make specific ghosts speak in sequence\n\n"
-        
+        message += (
+            "• `!speak ghost1 ghost2 ...` - Make specific ghosts speak in sequence\n\n"
+        )
+
         message += "**Management Commands:**\n"
         message += "• `!list` - List all loaded ghosts\n"
         message += "• `!reload` - Reload ghost configurations\n"
         message += "• `!status` - Show system status\n"
         message += "• `!test-ghost [handle]` - Test a specific ghost\n"
         message += "• `!commands` - Show this help message\n"
-        
+
         await ctx.send(message)
 
-    async def cmd_speak(self, ctx, *ghost_handles: str):
+    async def cmd_speak(self, ctx, ghost_handles: str = None):
         """Make specific ghosts speak in sequence"""
         if len(self.ghost_group) == 0:
             await ctx.send("❌ No ghosts loaded! Use `!reload` first.")
             return
 
-        # If no ghosts specified, use all available ghosts
-        if not ghost_handles:
-            ghost_handles = list(self.ghost_group.keys())
+        # Parse ghost handles from the raw argument
+        handles = ghost_handles.split() if ghost_handles else []
+        logger.info(f"👻 Speaking with {handles!r}")
+
+        # If no ghosts specified, use all available ghosts, randomize order
+        if not handles:
+            handles = list(self.ghost_group.keys())
+            random.shuffle(handles)
 
         # Find the ghosts
         ghosts_to_speak = []
-        for handle in ghost_handles:
+        for handle in handles:
             ghost = self.ghost_group.get(handle.lower())
             if ghost:
                 ghosts_to_speak.append(ghost)
@@ -428,7 +454,7 @@ class GhostBot(commands.Bot):
         for ghost in ghosts_to_speak:
             try:
                 await self.activate_ghost(ghost, ctx.message)
-                
+
                 # Add random delay between responses (1-3 seconds)
                 if ghost != ghosts_to_speak[-1]:  # Don't delay after the last ghost
                     delay = random.uniform(1.0, 3.0)
