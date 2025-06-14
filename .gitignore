@@ -1,3 +1,5 @@
-.venv
+.venv/
 .env
-__pycache__
+__pycache__/
+_attic/
+node_modules/
