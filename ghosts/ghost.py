@@ -1,11 +1,15 @@
 import json
 import yaml
+import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 import litellm
-from litellm import completion
+from litellm import acompletion
 import os
+
+# Set up logging for this module
+logger = logging.getLogger(__name__)
 
 class Ghost(BaseModel):
     """A digital ghost with LLM capabilities"""
@@ -61,14 +65,18 @@ class Ghost(BaseModel):
         Returns:
             Generated response text
         """
+        logger.info(f"🧠 {self.name} calling LLM {self.model} with {len(messages)} messages, max_tokens={max_tokens}")
+        
         try:
             # Prepare the full message list with system prompt
             full_messages = [
                 {"role": "system", "content": self.instructions}
             ] + messages
             
-            # Call litellm
-            response = await completion(
+            logger.debug(f"💭 {self.name} LLM input: {len(full_messages)} total messages, temp={self.temperature}")
+            
+            # Call litellm async
+            response = await acompletion(
                 model=self.model,
                 messages=full_messages,
                 temperature=self.temperature,
@@ -76,14 +84,23 @@ class Ghost(BaseModel):
                 timeout=30  # 30 second timeout
             )
             
-            return response.choices[0].message.content.strip()
+            response_text = response.choices[0].message.content.strip()
+            logger.info(f"✅ {self.name} LLM response received: {len(response_text)} characters")
+            logger.debug(f"📝 {self.name} response preview: {response_text[:100]}...")
+            
+            return response_text
             
         except Exception as e:
+            # Log the error with full details
+            logger.error(f"❌ {self.name} LLM call failed: {type(e).__name__}: {str(e)}")
+            logger.debug(f"🔍 {self.name} LLM error details", exc_info=True)
+            
             # Fallback response if LLM fails
             fallback_msg = f"*{self.name} flickers mysteriously* Sorry, I'm having trouble connecting to the spirit realm right now... ({str(e)[:50]})"
+            logger.warning(f"🔄 {self.name} using fallback response")
             return fallback_msg
     
-    def format_discord_messages_for_llm(self, discord_messages: List[Any]) -> List[Dict[str, str]]:
+    def format_discord_messages_for_llm(self, discord_messages: List[Any], message_limit: int = 50) -> List[Dict[str, str]]:
         """
         Convert Discord message objects to LLM format
         
@@ -96,19 +113,62 @@ class Ghost(BaseModel):
         formatted_messages = []
         
         for msg in discord_messages:
-            # Skip bot messages or empty messages
-            if msg.author.bot or not msg.content.strip():
+            # Skip empty messages
+            if not msg.content.strip():
+                continue
+            
+            # Check if this message is from the current ghost (via webhook)
+            is_current_ghost = (
+                hasattr(msg, 'webhook_id') and msg.webhook_id and 
+                hasattr(msg.author, 'name') and msg.author.name == self.discord_username
+            )
+            
+            # Check if this message is from another ghost (webhook with different name)
+            is_other_ghost = (
+                hasattr(msg, 'webhook_id') and msg.webhook_id and 
+                hasattr(msg.author, 'name') and msg.author.name != self.discord_username and
+                msg.author.name.endswith('*')  # Our ghosts end with *
+            )
+            
+            # Check if this is a regular bot message (not webhook)
+            is_regular_bot = msg.author.bot and not hasattr(msg, 'webhook_id')
+            
+            if is_current_ghost:
+                # This ghost's own previous messages -> assistant role, no prefix
+                formatted_msg = {
+                    "role": "assistant",
+                    "content": msg.content
+                }
+                formatted_messages.append(formatted_msg)
+                logger.debug(f"💬 {self.name} found own message: {msg.content[:50]}...")
+                
+            elif is_other_ghost:
+                # Another ghost's message -> user role with ghost name
+                ghost_name = msg.author.name
+                formatted_msg = {
+                    "role": "user", 
+                    "content": f"{ghost_name}: {msg.content}"
+                }
+                formatted_messages.append(formatted_msg)
+                logger.debug(f"👻 {self.name} found other ghost message from {ghost_name}")
+                
+            elif is_regular_bot:
+                # Skip regular bot messages (not from ghosts)
+                logger.debug(f"🤖 {self.name} skipping regular bot message from {msg.author.display_name}")
                 continue
                 
-            # Format the message
-            formatted_msg = {
-                "role": "user",
-                "content": f"{msg.author.display_name}: {msg.content}"
-            }
-            formatted_messages.append(formatted_msg)
+            else:
+                # Regular user message -> user role with username
+                formatted_msg = {
+                    "role": "user",
+                    "content": f"{msg.author.display_name}: {msg.content}"
+                }
+                formatted_messages.append(formatted_msg)
         
-        # Limit to reasonable context length
-        return formatted_messages[-15:]  # Last 15 non-bot messages
+        # Limit to configured context length
+        limited_messages = formatted_messages[-message_limit:]  # Last N messages based on app config
+        logger.debug(f"📝 {self.name} formatted {len(limited_messages)}/{len(formatted_messages)} messages for LLM context (limit: {message_limit})")
+        return limited_messages
     
     def __str__(self) -> str:
         return f"Ghost({self.name}, handle='{self.discord_handle}', model={self.model})"
@@ -124,11 +184,13 @@ def load_ghosts_from_directory(directory: str) -> Dict[str, Ghost]:
     Returns:
         Dictionary mapping discord_handle to Ghost instance
     """
+    logger.info(f"📁 Loading ghosts from directory: {directory}")
+    
     ghosts = {}
     directory_path = Path(directory)
     
     if not directory_path.exists():
-        print(f"Warning: Directory {directory} does not exist")
+        logger.warning(f"⚠️  Directory {directory} does not exist")
         return ghosts
     
     # Supported file extensions
@@ -137,14 +199,18 @@ def load_ghosts_from_directory(directory: str) -> Dict[str, Ghost]:
     for file_path in directory_path.iterdir():
         if file_path.is_file() and file_path.suffix.lower() in supported_extensions:
             try:
+                logger.debug(f"🔍 Processing ghost file: {file_path}")
                 ghost = load_ghost_from_file(file_path)
                 if ghost:
                     ghosts[ghost.discord_handle] = ghost
-                    print(f"✅ Loaded ghost: {ghost.name} ({ghost.discord_handle})")
+                    logger.info(f"✅ Loaded ghost: {ghost.name} (@{ghost.discord_handle}) using {ghost.model}")
+                else:
+                    logger.warning(f"⚠️  Failed to create ghost from {file_path}")
             except Exception as e:
-                print(f"❌ Failed to load {file_path}: {e}")
+                logger.error(f"❌ Failed to load {file_path}: {type(e).__name__}: {e}")
+                logger.debug(f"🔍 Ghost loading error details for {file_path}", exc_info=True)
     
-    print(f"📋 Loaded {len(ghosts)} ghosts total")
+    logger.info(f"📋 Successfully loaded {len(ghosts)} ghosts total")
     return ghosts
 
 
@@ -159,20 +225,26 @@ def load_ghost_from_file(file_path: Path) -> Optional[Ghost]:
         Ghost instance or None if loading failed
     """
     try:
+        logger.debug(f"📖 Reading ghost file: {file_path}")
+        
         with open(file_path, 'r', encoding='utf-8') as f:
             if file_path.suffix.lower() == '.json':
                 data = json.load(f)
+                logger.debug(f"🔧 Parsed JSON data from {file_path}")
             elif file_path.suffix.lower() in ['.yaml', '.yml']:
                 data = yaml.safe_load(f)
+                logger.debug(f"🔧 Parsed YAML data from {file_path}")
             else:
                 raise ValueError(f"Unsupported file type: {file_path.suffix}")
         
         # Validate and create Ghost instance
         ghost = Ghost(**data)
+        logger.debug(f"✅ Created ghost instance: {ghost.name} with handle '{ghost.discord_handle}'")
         return ghost
         
     except Exception as e:
-        print(f"Error loading ghost from {file_path}: {e}")
+        logger.error(f"❌ Error loading ghost from {file_path}: {type(e).__name__}: {e}")
+        logger.debug(f"🔍 File loading error details for {file_path}", exc_info=True)
         return None
 
 
