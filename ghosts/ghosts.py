@@ -72,16 +72,15 @@ def find_ghost_by_mention(message_content: str) -> Optional[Ghost]:
     pseudo_mention_pattern = r'@(\w+)'
     pseudo_mentions = re.findall(pseudo_mention_pattern, message_lower)
     
-    # Check direct mentions first
+    # Check direct mentions by handle
     for mention in pseudo_mentions:
         if mention in GHOSTS:
             return GHOSTS[mention]
     
-    # Check aliases
-    for ghost in GHOSTS.values():
-        for alias in ghost.get_aliases():
-            if alias in message_lower:
-                return ghost
+    # Check if any handle appears in the message
+    for handle, ghost in GHOSTS.items():
+        if handle in message_lower:
+            return ghost
     
     return None
 
@@ -99,7 +98,7 @@ async def on_ready():
     if GHOSTS:
         logger.info(f'🎭 Ghost system ready with {len(GHOSTS)} ghosts:')
         for ghost_key, ghost in GHOSTS.items():
-            logger.info(f'  👻 {ghost.name} using {ghost.model}')
+            logger.info(f'  👻 {ghost.name} (handle: {ghost.handle}) using {ghost.model}')
     else:
         logger.warning('⚠️  No ghosts loaded! Check your bots directory.')
     
@@ -219,10 +218,8 @@ async def list_ghosts(ctx):
     message = "👻 **Loaded Ghosts:**\n\n"
     
     for ghost_key, ghost in GHOSTS.items():
-        aliases = ghost.get_aliases()
-        alias_str = ', '.join([f"`@{alias}`" for alias in aliases])
         message += f"**{ghost.name}**\n"
-        message += f"  • Aliases: {alias_str}\n"
+        message += f"  • Handle: `@{ghost.handle}`\n"
         message += f"  • Model: `{ghost.model}` (temp: {ghost.temperature})\n"
         message += f"  • Description: {ghost.description}\n\n"
     
@@ -283,7 +280,7 @@ async def test_ghost(ctx, ghost_handle: str = None):
     
     # Select ghost
     if ghost_handle:
-        ghost_key = ghost_handle.lower()
+        ghost_key = ghost_handle.lower()  # Normalize to match stored handles
         ghost = GHOSTS.get(ghost_key)
         if not ghost:
             available = ', '.join(GHOSTS.keys())

@@ -4,9 +4,7 @@ import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field, HttpUrl, field_validator
-import litellm
 from litellm import acompletion
-import os
 
 # Set up logging for this module
 logger = logging.getLogger(__name__)
@@ -26,7 +24,8 @@ Instructions:
 class Ghost(BaseModel):
     """A digital ghost with LLM capabilities"""
     
-    name: str = Field(..., description="Display name of the ghost (also used as handle and username)")
+    name: str = Field(..., description="Display name of the ghost")
+    handle: str = Field(..., description="Handle/username for mentions and identification")
     discord_avatar: Optional[HttpUrl] = Field(default=None, description="Avatar URL for webhook display (None uses default)")
     description: str = Field(..., description="Brief description of the ghost")
     instructions: str = Field(..., description="System prompt/personality instructions for the LLM")
@@ -40,8 +39,14 @@ class Ghost(BaseModel):
     @field_validator('name')
     @classmethod
     def name_must_be_clean(cls, v):
-        """Ensure name is clean for use as handle"""
+        """Ensure name is clean for display"""
         return v.strip()
+    
+    @field_validator('handle')
+    @classmethod
+    def handle_must_be_clean(cls, v):
+        """Ensure handle is clean for use as identifier"""
+        return v.strip().lower()
     
     @field_validator('temperature')
     @classmethod
@@ -50,23 +55,6 @@ class Ghost(BaseModel):
         if v is not None and (v < 0 or v > 2):
             raise ValueError('Temperature must be between 0 and 2')
         return v
-    
-    def get_aliases(self) -> List[str]:
-        """Get all possible aliases for this ghost"""
-        name_lower = self.name.lower()
-        aliases = [name_lower]
-        
-        # Add variations of the name
-        if 'ghost' in name_lower:
-            base_name = name_lower.replace('ghost', '').replace("'s", "").strip()
-            if base_name:
-                aliases.append(base_name)
-        
-        # Add just the first word of the name
-        first_word = name_lower.split()[0] if name_lower.split() else name_lower
-        aliases.append(first_word)
-        
-        return list(set(aliases))  # Remove duplicates
     
     async def call_llm(self, messages: List[Dict[str, str]], max_tokens: int = 300) -> str:
         """
@@ -137,6 +125,11 @@ class Ghost(BaseModel):
             if not msg.content.strip():
                 continue
             
+            # Skip !commands (system commands)
+            if msg.content.strip().startswith('!'):
+                logger.debug(f"🚫 {self.name} skipping command message: {msg.content[:50]}...")
+                continue
+            
             # Check if this message is from the current ghost (via webhook)
             is_current_ghost = (
                 hasattr(msg, 'webhook_id') and msg.webhook_id and 
@@ -150,7 +143,7 @@ class Ghost(BaseModel):
                 hasattr(msg.author, 'discriminator') and msg.author.discriminator == '0000'  # Webhook messages have discriminator 0000
             )
             
-            # Check if this is a regular bot message (not webhook)
+            # Check if this is a regular bot message (not webhook) - these are typically command responses
             is_regular_bot = msg.author.bot and not hasattr(msg, 'webhook_id')
             
             if is_current_ghost:
@@ -173,8 +166,8 @@ class Ghost(BaseModel):
                 logger.debug(f"👻 {self.name} found other ghost message from {ghost_name}")
                 
             elif is_regular_bot:
-                # Skip regular bot messages (not from ghosts)
-                logger.debug(f"🤖 {self.name} skipping regular bot message from {msg.author.display_name}")
+                # Skip regular bot messages (command responses, etc.)
+                logger.debug(f"🚫 {self.name} skipping bot command response from {msg.author.display_name}")
                 continue
                 
             else:
@@ -191,7 +184,41 @@ class Ghost(BaseModel):
         return limited_messages
     
     def __str__(self) -> str:
-        return f"Ghost({self.name}, model={self.model})"
+        return f"Ghost(@{self.handle}, {self.name}, model={self.model})"
+
+    @classmethod
+    def load_from_file(cls, file_path: Path) -> Optional['Ghost']:
+        """
+        Load a single ghost from a file
+        
+        Args:
+            file_path: Path to the ghost configuration file
+            
+        Returns:
+            Ghost instance or None if loading failed
+        """
+        try:
+            logger.debug(f"📖 Reading ghost file: {file_path}")
+            
+            with open(file_path, 'r', encoding='utf-8') as f:
+                if file_path.suffix.lower() == '.json':
+                    data = json.load(f)
+                    logger.debug(f"🔧 Parsed JSON data from {file_path}")
+                elif file_path.suffix.lower() in ['.yaml', '.yml']:
+                    data = yaml.safe_load(f)
+                    logger.debug(f"🔧 Parsed YAML data from {file_path}")
+                else:
+                    raise ValueError(f"Unsupported file type: {file_path.suffix}")
+            
+            # Validate and create Ghost instance
+            ghost = cls(**data)
+            logger.debug(f"✅ Created ghost instance: {ghost.name}")
+            return ghost
+            
+        except Exception as e:
+            logger.error(f"❌ Error loading ghost from {file_path}: {type(e).__name__}: {e}")
+            logger.debug(f"🔍 File loading error details for {file_path}", exc_info=True)
+            return None
 
 
 def load_ghosts_from_directory(directory: str) -> Dict[str, Ghost]:
@@ -220,11 +247,11 @@ def load_ghosts_from_directory(directory: str) -> Dict[str, Ghost]:
         if file_path.is_file() and file_path.suffix.lower() in supported_extensions:
             try:
                 logger.debug(f"🔍 Processing ghost file: {file_path}")
-                ghost = load_ghost_from_file(file_path)
+                ghost = Ghost.load_from_file(file_path)
                 if ghost:
-                    ghost_key = ghost.name.lower()
+                    ghost_key = ghost.handle
                     ghosts[ghost_key] = ghost
-                    logger.info(f"✅ Loaded ghost: {ghost.name} using {ghost.model}")
+                    logger.info(f"✅ Loaded ghost: {ghost.name} (handle: {ghost.handle}) using {ghost.model}")
                 else:
                     logger.warning(f"⚠️  Failed to create ghost from {file_path}")
             except Exception as e:
@@ -235,46 +262,3 @@ def load_ghosts_from_directory(directory: str) -> Dict[str, Ghost]:
     return ghosts
 
 
-def load_ghost_from_file(file_path: Path) -> Optional[Ghost]:
-    """
-    Load a single ghost from a file
-    
-    Args:
-        file_path: Path to the ghost configuration file
-        
-    Returns:
-        Ghost instance or None if loading failed
-    """
-    try:
-        logger.debug(f"📖 Reading ghost file: {file_path}")
-        
-        with open(file_path, 'r', encoding='utf-8') as f:
-            if file_path.suffix.lower() == '.json':
-                data = json.load(f)
-                logger.debug(f"🔧 Parsed JSON data from {file_path}")
-            elif file_path.suffix.lower() in ['.yaml', '.yml']:
-                data = yaml.safe_load(f)
-                logger.debug(f"🔧 Parsed YAML data from {file_path}")
-            else:
-                raise ValueError(f"Unsupported file type: {file_path.suffix}")
-        
-        # Validate and create Ghost instance
-        ghost = Ghost(**data)
-        logger.debug(f"✅ Created ghost instance: {ghost.name}")
-        return ghost
-        
-    except Exception as e:
-        logger.error(f"❌ Error loading ghost from {file_path}: {type(e).__name__}: {e}")
-        logger.debug(f"🔍 File loading error details for {file_path}", exc_info=True)
-        return None
-
-
-# Example usage and testing
-if __name__ == "__main__":
-    # Test loading ghosts
-    ghosts = load_ghosts_from_directory("../bots")
-    
-    for handle, ghost in ghosts.items():
-        print(f"\n{ghost}")
-        print(f"  Aliases: {ghost.get_aliases()}")
-        print(f"  Description: {ghost.description}") 
