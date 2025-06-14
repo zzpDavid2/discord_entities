@@ -1,0 +1,20 @@
+[project]
+name = "ghosts"
+version = "0.1.0"
+description = ""
+authors = [
+    {name = "Tomas Gavenciak",email = "gavento@gmail.com"},
+    {name = "Anna Gajdova",email = "gajdova.anna@gmail.com"}
+]
+requires-python = ">=3.12"
+readme = "README.md"
+dependencies = [
+    "litellm (>=1.72.4,<2.0.0)",
+    "python-dotenv (>=1.1.0,<2.0.0)",
+    "discord-py (>=2.5.2,<3.0.0)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
