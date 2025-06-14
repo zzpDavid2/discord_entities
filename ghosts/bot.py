@@ -42,13 +42,15 @@ class GhostBot(commands.Bot):
         self.add_listener(self.on_message, "on_message")
         logger.debug("Event handlers registered")
 
-        # Commands are registered by the decorator
-        self.add_command(self.cmd_list)
-        self.add_command(self.cmd_reload)
-        self.add_command(self.cmd_status)
-        self.add_command(self.cmd_test_ghost)
-        self.add_command(self.cmd_commands)
-        self.add_command(self.cmd_speak)
+        self.add_command(commands.Command(self.cmd_speak, name="speak"))
+        self.add_command(commands.Command(self.cmd_list, name="list"))
+        self.add_command(commands.Command(self.cmd_reload, name="reload"))
+        self.add_command(commands.Command(self.cmd_status, name="status"))
+        self.add_command(commands.Command(self.cmd_test_ghost, name="test-ghost"))
+        self.add_command(commands.Command(self.cmd_commands, name="commands"))
+
+        # Add error handler for unknown commands
+        self.add_listener(self.on_command_error, "on_command_error")
 
     def set_message_limit(self, limit: int):
         """Set the message limit for all ghosts"""
@@ -270,8 +272,7 @@ class GhostBot(commands.Bot):
                     f"⚠️  Ghost summon failed - no ghosts available for {message.author.display_name}"
                 )
 
-    @commands.command(name="list")
-    async def cmd_list(self, ctx):
+    async def cmd_list(self, ctx, *args):
         """List all loaded ghosts"""
         if len(self.ghost_group) == 0:
             await ctx.send(
@@ -298,8 +299,7 @@ class GhostBot(commands.Bot):
 
         await ctx.send(message)
 
-    @commands.command(name="reload")
-    async def cmd_reload(self, ctx):
+    async def cmd_reload(self, ctx, *args):
         """Reload ghost configurations from files"""
         old_count = len(self.ghost_group)
 
@@ -315,8 +315,7 @@ class GhostBot(commands.Bot):
                 "❌ **No ghosts loaded!** Check your bots directory and file formats."
             )
 
-    @commands.command(name="status")
-    async def cmd_status(self, ctx):
+    async def cmd_status(self, ctx, *args):
         """Show detailed status of the ghost system"""
         webhook_status = "Enabled" if self.channel_webhooks else "Limited"
 
@@ -340,7 +339,6 @@ class GhostBot(commands.Bot):
 
         await ctx.send(message)
 
-    @commands.command(name="test-ghost")
     async def cmd_test_ghost(self, ctx, ghost_handle: str = None):
         """Test a specific ghost or the first available one"""
         if len(self.ghost_group) == 0:
@@ -384,8 +382,7 @@ class GhostBot(commands.Bot):
         except Exception as e:
             await ctx.send(f"❌ **Test failed for {ghost.name}:** {str(e)}")
 
-    @commands.command(name="commands")
-    async def cmd_commands(self, ctx):
+    async def cmd_commands(self, ctx, *args):
         """List all available commands"""
         message = "👻 **Available Commands:**\n\n"
         
@@ -404,7 +401,6 @@ class GhostBot(commands.Bot):
         
         await ctx.send(message)
 
-    @commands.command(name="speak")
     async def cmd_speak(self, ctx, *ghost_handles: str):
         """Make specific ghosts speak in sequence"""
         if len(self.ghost_group) == 0:
@@ -440,3 +436,15 @@ class GhostBot(commands.Bot):
 
             except Exception as e:
                 await ctx.send(f"❌ **Error with {ghost.name}**: {str(e)}")
+
+    async def on_command_error(self, ctx, error):
+        """Handle command errors"""
+        if isinstance(error, commands.CommandNotFound):
+            # Get list of valid commands
+            valid_commands = ", ".join(f"!{cmd.name}" for cmd in self.commands)
+            await ctx.send(f"❓ Unknown command. Valid commands: {valid_commands}")
+            return
+
+        # Let other errors propagate
+        logger.error(f"Command error: {type(error).__name__}: {error}")
+        raise error
