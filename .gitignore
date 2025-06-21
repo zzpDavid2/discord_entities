@@ -3,3 +3,4 @@
 __pycache__/
 _attic/
 node_modules/
+.uv/
