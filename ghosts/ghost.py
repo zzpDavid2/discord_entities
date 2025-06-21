@@ -38,12 +38,12 @@ class Ghost(BaseModel):
     )
     # New fields for entity-specific LLM configuration
     base_url: Optional[str] = Field(
-        default=None, 
-        description="Custom API URL for this entity's LLM client (overrides .env configuration)"
+        default=None,
+        description="Custom API URL for this entity's LLM client (overrides .env configuration)",
     )
     api_key: Optional[str] = Field(
         default=None,
-        description="Custom API key for this entity's LLM client (overrides .env configuration)"
+        description="Custom API key for this entity's LLM client (overrides .env configuration)",
     )
 
     class Config:
@@ -76,7 +76,7 @@ class Ghost(BaseModel):
         """Validate API URL format"""
         if v is not None:
             v = v.strip()
-            if not v.startswith(('http://', 'https://')):
+            if not v.startswith(("http://", "https://")):
                 raise ValueError("API URL must start with http:// or https://")
         return v
 
@@ -128,7 +128,7 @@ class Ghost(BaseModel):
                 # litellm expects the model to be in the format "openai/<model>" for a custom API URL
                 completion_kwargs["model"] = "openai/" + self.model
                 logger.debug(f"🔗 {self.name} using custom API URL: {self.base_url}")
-            
+
             if self.api_key:
                 completion_kwargs["api_key"] = self.api_key
                 logger.debug(f"🔑 {self.name} using custom API key")
@@ -160,29 +160,32 @@ class Ghost(BaseModel):
         """
         Normalize a name by filtering out non-letter characters, emojis, and non-printable characters.
         Keeps letters (including non-Latin), numbers, and spaces.
-        
+
         Args:
             name: The name to normalize
-            
+
         Returns:
             Normalized name with only letter-like characters
         """
         import re
+
         # Keep letters (including non-Latin), numbers, and spaces
         # Remove emojis, symbols, and other non-printable characters
-        normalized = re.sub(r'[^\w\s]', '', name, flags=re.UNICODE)
+        normalized = re.sub(r"[^\w\s]", "", name, flags=re.UNICODE)
         # Remove extra whitespace
-        normalized = ' '.join(normalized.split())
+        normalized = " ".join(normalized.split())
         return normalized
 
     def format_discord_messages_for_llm(
-        self, discord_messages: List[Any], message_limit: int = 50
+        self, discord_messages: List[Any], message_limit: int = 50, ghost_group=None
     ) -> List[Dict[str, str]]:
         """
         Convert Discord message objects to LLM format
 
         Args:
             discord_messages: List of Discord message objects
+            message_limit: Maximum number of messages to include
+            ghost_group: Optional GhostGroup to look up ghost handles
 
         Returns:
             List of formatted messages for LLM
@@ -206,7 +209,8 @@ class Ghost(BaseModel):
                 hasattr(msg, "webhook_id")
                 and msg.webhook_id
                 and hasattr(msg.author, "name")
-                and self._normalize_name(msg.author.name) == self._normalize_name(self.name)
+                and self._normalize_name(msg.author.name)
+                == self._normalize_name(self.name)
             )
 
             # Check if this message is from another entity (webhook with different name)
@@ -214,9 +218,11 @@ class Ghost(BaseModel):
                 hasattr(msg, "webhook_id")
                 and msg.webhook_id
                 and hasattr(msg.author, "name")
-                and self._normalize_name(msg.author.name) != self._normalize_name(self.name)
+                and self._normalize_name(msg.author.name)
+                != self._normalize_name(self.name)
                 and hasattr(msg.author, "discriminator")
-                and msg.author.discriminator == "0000"  # Webhook messages have discriminator 0000
+                and msg.author.discriminator
+                == "0000"  # Webhook messages have discriminator 0000
             )
 
             # Check if this is a regular bot message (not webhook) - these are typically command responses
@@ -231,14 +237,37 @@ class Ghost(BaseModel):
             elif is_other_ghost:
                 # Another entity's message -> user role with entity name
                 ghost_name = msg.author.name
+
+                # Try to find the ghost and get its handle
+                ghost_handle = None
+                if ghost_group:
+                    # Look up the ghost by name
+                    for handle, ghost in ghost_group:
+                        if self._normalize_name(ghost.name) == self._normalize_name(
+                            ghost_name
+                        ):
+                            ghost_handle = handle
+                            break
+
+                content = (
+                    f"{ghost_name}: {msg.content}"
+                    if not ghost_handle
+                    else f"{ghost_name} (@{ghost_handle}): {msg.content}"
+                )
                 formatted_msg = {
                     "role": "user",
-                    "content": f"{ghost_name}: {msg.content}",
+                    "content": content,
                 }
                 formatted_messages.append(formatted_msg)
-                logger.debug(
-                    f"{self.name} found other entity message from {ghost_name}"
-                )
+
+                if ghost_handle:
+                    logger.debug(
+                        f"{self.name} found other entity message from {ghost_name} (@{ghost_handle})"
+                    )
+                else:
+                    logger.debug(
+                        f"{self.name} found other entity message from {ghost_name}"
+                    )
 
             elif is_regular_bot:
                 # Skip regular bot messages (command responses, etc.)
@@ -300,7 +329,9 @@ class Ghost(BaseModel):
             return ghost
 
         except Exception as e:
-            error_msg = f"Error loading entity from {file_path}: {type(e).__name__}: {e}"
+            error_msg = (
+                f"Error loading entity from {file_path}: {type(e).__name__}: {e}"
+            )
             logger.error(f"❌ {error_msg}")
             logger.debug(
                 f"🔍 File loading error details for {file_path}", exc_info=True

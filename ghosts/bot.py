@@ -213,7 +213,7 @@ class GhostBot(commands.Bot):
 
                     # Format messages for LLM
                     llm_messages = ghost.format_discord_messages_for_llm(
-                        recent_messages, message_limit=self.message_limit
+                        recent_messages, message_limit=self.message_limit, ghost_group=self.ghost_group
                     )
                     logger.debug(
                         f"💬 {ghost.name} formatted {len(llm_messages)} messages for context"
