@@ -272,11 +272,11 @@ class GhostBot(commands.Bot):
                 )
 
         if mentioned_ghosts or is_direct_mention:
-            # If no specific ghosts selected and it's a direct mention, pick first available
+            # If no specific ghosts selected and it's a direct mention, a random ghost is summoned
             if not mentioned_ghosts and is_direct_mention and len(self.ghost_group) > 0:
-                mentioned_ghosts = [list(self.ghost_group.values())[0]]
+                mentioned_ghosts = [random.choice(list(self.ghost_group.values()))]
                 logger.debug(
-                    f"🎲 No specific ghosts requested, using default: {mentioned_ghosts[0].name}"
+                    f"🎲 No specific ghosts requested, using random: {mentioned_ghosts[0].name}"
                 )
 
             if mentioned_ghosts:
