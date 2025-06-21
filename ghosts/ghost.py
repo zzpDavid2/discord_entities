@@ -10,15 +10,7 @@ from litellm import acompletion
 logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """
-You are a character in a discord discussion of users and other bots. The bots are sometimes referred to as ghosts since they may be modelled based on other users (or purely fictional). 
 
-Instructions:
-* You always see the whole conversation (or at least the 50 last messages)
-* Respond to the conversation within your character, which is described below.
-* Do engage with the conversation and respond to the user as well as other ghosts and other participants.
-* It is the time for you to speak. Only respond with one message at a time. Do not prefix your message with your name, speak directly.
-* You can use emojis and markdown to make your messages more engaging, but first of all follow your character and context.
-* You can use the @username to address other users.
 """
 
 
