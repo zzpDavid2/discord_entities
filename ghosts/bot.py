@@ -422,15 +422,15 @@ class GhostBot(commands.Bot):
 
         message += "**Usage:**\n"
         message += (
-            f"• `@{list(self.ghost_group.keys())[0]} hello` - Summon specific entity\n"
+            f"• `@{list(self.ghost_group.keys())[0]} hello there!` - Summon specific entity\n"
         )
         message += (
-            f"• `@{self.user.display_name} help` - Summon first available entity\n"
+            f"• `@{self.user.display_name} hello there!` - Summon a random entity\n"
         )
         message += "• Reply to any entity's message - Automatically summon that entity\n"
         message += "• Reply + mention other entities - Multiple entities respond\n"
         message += "• `@entity1 @entity2 message` - Tag multiple entities at once\n"
-        message += "• `!chat` - Start a conversation between all entities\n"
+        message += "• `!chat [entity1 entity2 ...] [number]` - Start a conversation between entities (optional: specify number of turns)\n"
         message += "• `!reload` - Reload entity configurations"
 
         await ctx.send(message)
@@ -555,7 +555,7 @@ class GhostBot(commands.Bot):
         message += "• Reply to any entity's message - Automatically summon that entity\n"
         message += "• Reply + mention other entities - Multiple entities respond\n"
         message += "• `!speak entity1 entity2 ...` - Make specific entities speak in sequence\n"
-        message += "• `!chat [entity1 entity2 ...]` - Start a conversation between entities\n\n"
+        message += "• `!chat [entity1 entity2 ...] [number]` - Start a conversation between entities (optional: specify number of turns)\n\n"
 
         message += "**Entity-to-Entity Features:**\n"
         message += "• Entities can tag each other with @entityname\n"
@@ -632,11 +632,33 @@ class GhostBot(commands.Bot):
             await ctx.send("❌ Need at least 2 entities for an entity chat! Use `!reload` to load more entities.")
             return
 
-        # Parse arguments for entity handles
-        if args:
-            ghost_handles = [arg.lower() for arg in args]
-        else:
-            # Use all available entities if none specified
+        # Parse arguments - look for numerical argument for turns
+        num_turns = 10  # Default number of turns
+        ghost_handles = []
+        found_number = False  # Track if we've already found a number
+        
+        for arg in args:
+            # Check if argument is a number (only use the first one found)
+            if not found_number:
+                try:
+                    potential_turns = int(arg)
+                    if potential_turns > 0:
+                        num_turns = potential_turns
+                        found_number = True
+                        logger.info(f"Setting conversation turns to {num_turns}")
+                        continue  # Skip adding this as an entity name
+                    else:
+                        # Not a valid turn count, treat as entity name
+                        ghost_handles.append(arg.lower())
+                except ValueError:
+                    # Not a number, treat as entity name
+                    ghost_handles.append(arg.lower())
+            else:
+                # Already found a number, treat everything else as entity names
+                ghost_handles.append(arg.lower())
+
+        # If no entities specified, use all available entities
+        if not ghost_handles:
             ghost_handles = list(self.ghost_group.keys())
 
         # Validate entity handles
@@ -653,25 +675,40 @@ class GhostBot(commands.Bot):
             return
 
         # Start the entity conversation
-        await ctx.send(f"🎭 Starting entity chat with: {', '.join(ghost.name for ghost in valid_ghosts)}")
+        await ctx.send(f"🎭 Starting entity chat with: {', '.join(ghost.name for ghost in valid_ghosts)} ({num_turns} turns)")
         
-        # Run 10 turns of conversation
-        for turn in range(10):
+        # Create a queue of speakers and randomize the initial order
+        speaker_queue = valid_ghosts.copy()
+        random.shuffle(speaker_queue)
+        
+        # Run the specified number of turns
+        for turn in range(num_turns):
             # Check if channel is still stopped before each turn
             channel_state = self.get_channel_state(ctx.channel.id)
             if channel_state.is_stopped():
                 await ctx.send("🛑 **Entity activity was stopped during !chat command.**")
                 return
-                
-            # Select entity for this turn (cycle through them)
-            current_ghost = valid_ghosts[turn % len(valid_ghosts)]
+            
+            # Select speaker from the first half of the queue
+            queue_size = len(speaker_queue)
+            if queue_size > 1:
+                # Select from first half of the queue
+                half_size = max(1, queue_size + 1 // 2)
+                selected_index = random.randint(0, half_size - 1)
+            else:
+                selected_index = 0
+            
+            current_ghost = speaker_queue[selected_index]
+            
+            # Move the selected speaker to the back of the queue
+            speaker_queue.append(speaker_queue.pop(selected_index))
             
             try:
                 # Activate the entity using the existing infrastructure
                 await self.activate_ghost(current_ghost, ctx.message)
                 
                 # Add random delay between responses (2-10 seconds)
-                if turn < 9:  # Don't delay after the last turn
+                if turn < num_turns - 1:  # Don't delay after the last turn
                     delay = random.uniform(2.0, 10.0)
                     await asyncio.sleep(delay)
 
