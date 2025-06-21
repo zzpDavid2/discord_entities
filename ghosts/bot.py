@@ -1,6 +1,5 @@
 import asyncio
 import logging
-import os
 import random
 from typing import Dict, List, Optional
 
@@ -314,7 +313,7 @@ class GhostBot(commands.Bot):
         message += (
             f"• `@{self.user.display_name} help` - Summon first available ghost\n"
         )
-        message += "• `!reload-ghosts` - Reload ghost configurations"
+        message += "• `!reload` - Reload ghost configurations"
 
         await ctx.send(message)
 
@@ -327,7 +326,7 @@ class GhostBot(commands.Bot):
 
         if new_count > 0:
             await ctx.send(
-                f"🔄 **Reloaded {new_count} ghosts** (was {old_count})\n\nUse `!ghosts` to see the updated list."
+                f"🔄 **Reloaded {new_count} ghosts** (was {old_count})\n\nUse `!list` to see the updated list."
             )
         else:
             await ctx.send(
