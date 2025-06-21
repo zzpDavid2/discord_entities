@@ -17,6 +17,7 @@ class Channel:
     """Simple channel state tracking"""
     def __init__(self):
         self.last_stop_time = 0  # Unix timestamp when !stop was last called
+        self.chat_participants = []  # List of ghost handles currently in an active chat
 
     def is_stopped(self) -> bool:
         """Check if channel is currently stopped (within 30 seconds of last stop)"""
@@ -25,6 +26,25 @@ class Channel:
     def stop(self):
         """Mark channel as stopped"""
         self.last_stop_time = time.time()
+        self.chat_participants.clear()  # Clear chat participants when stopped
+
+    def add_chat_participant(self, ghost_handle: str):
+        """Add a ghost handle to the chat participants list"""
+        if ghost_handle not in self.chat_participants:
+            self.chat_participants.append(ghost_handle)
+
+    def remove_chat_participant(self, ghost_handle: str):
+        """Remove a ghost handle from the chat participants list"""
+        if ghost_handle in self.chat_participants:
+            self.chat_participants.remove(ghost_handle)
+
+    def clear_chat_participants(self):
+        """Clear all chat participants"""
+        self.chat_participants.clear()
+
+    def is_in_chat(self, ghost_handle: str) -> bool:
+        """Check if a ghost handle is currently participating in a chat"""
+        return ghost_handle in self.chat_participants
 
 
 class GhostBot(commands.Bot):
@@ -365,8 +385,19 @@ class GhostBot(commands.Bot):
                 await message.channel.send(f"**Dropping entity mentions ({', '.join(ghost.name for ghost in mentioned_ghosts)}) because entity activity is currently stopped in this channel**")
                 return
             
+            # Filter out ghosts that are currently in a chat (unless it's a direct user mention)
+            if not self.is_direct_user_mention(message):
+                filtered_ghosts = []
+                for ghost in mentioned_ghosts:
+                    if channel_state.is_in_chat(ghost.handle):
+                        logger.info(f"🛑 Ghost {ghost.handle} blocked from mention (currently in chat)")
+                    else:
+                        filtered_ghosts.append(ghost)
+                mentioned_ghosts = filtered_ghosts
+            
             # If no specific entities selected and it's a direct mention, a random entity is summoned
             if not mentioned_ghosts and is_direct_mention and len(self.ghost_group) > 0:
+                # For direct mentions, still allow ghosts in chat to respond
                 mentioned_ghosts = [random.choice(list(self.ghost_group.values()))]
                 logger.debug(
                     f"🎲 No specific entities requested, using random: {mentioned_ghosts[0].name}"
@@ -377,9 +408,9 @@ class GhostBot(commands.Bot):
                 unique_ghosts = []
                 seen_ghosts = set()
                 for ghost in mentioned_ghosts:
-                    if ghost.name not in seen_ghosts:
+                    if ghost.handle not in seen_ghosts:
                         unique_ghosts.append(ghost)
-                        seen_ghosts.add(ghost.name)
+                        seen_ghosts.add(ghost.handle)
                 
                 logger.info(
                     f"Summoning {len(unique_ghosts)} entity(ies) for {message.author.display_name} in #{message.channel.name}: {', '.join(ghost.name for ghost in unique_ghosts)}"
@@ -466,6 +497,10 @@ class GhostBot(commands.Bot):
             message += f"🛑 **This Channel:** Stopped ({remaining_time:.1f}s remaining)\n\n"
         else:
             message += f"▶️ **This Channel:** Active\n\n"
+        
+        # Show chat participants if any
+        if channel_state.chat_participants:
+            message += f"🎭 **Active Chat:** {', '.join(channel_state.chat_participants)}\n\n"
 
         if len(self.ghost_group) > 0:
             message += "**Entity Models:**\n"
@@ -632,49 +667,58 @@ class GhostBot(commands.Bot):
         # Start the entity conversation
         await ctx.send(f"🎭 Starting entity chat with: {', '.join(ghost.name for ghost in valid_ghosts)} ({num_turns} turns)")
         
+        # Add all participants to the chat list
+        channel_state = self.get_channel_state(ctx.channel.id)
+        for ghost in valid_ghosts:
+            channel_state.add_chat_participant(ghost.handle)
+        
         # Create a queue of speakers and randomize the initial order
         speaker_queue = valid_ghosts.copy()
         random.shuffle(speaker_queue)
         
-        # Run the specified number of turns
-        for turn in range(num_turns):
-            # Check if channel is still stopped before each turn
-            channel_state = self.get_channel_state(ctx.channel.id)
-            if channel_state.is_stopped():
-                await ctx.send("🛑 **Entity activity was stopped during !chat command.**")
-                return
-            
-            logger.info(f"Chat turn {turn} of {num_turns}: queue={[s.name for s in speaker_queue]}")
-            # Select speaker from the first half of the queue
-            queue_size = len(speaker_queue)
-            if queue_size > 1:
-                # Select from first half of the queue
-                half_size = max(1, queue_size + 1 // 2)
-                selected_index = random.randint(0, half_size - 1)
-            else:
-                selected_index = 0
-            
-            current_ghost = speaker_queue[selected_index]
-            
-            # Move the selected speaker to the back of the queue
-            speaker_queue.pop(selected_index)
-            speaker_queue.append(current_ghost)
-            
-            try:
-                # Activate the entity using the existing infrastructure
-                await self.activate_ghost(current_ghost, ctx.message)
+        try:
+            # Run the specified number of turns
+            for turn in range(num_turns):
+                # Check if channel is still stopped before each turn
+                if channel_state.is_stopped():
+                    await ctx.send("🛑 **Entity activity was stopped during !chat command.**")
+                    return
                 
-                # Add random delay between responses (2-10 seconds)
-                if turn < num_turns - 1:  # Don't delay after the last turn
-                    delay = random.uniform(2.0, 10.0)
-                    await asyncio.sleep(delay)
+                logger.info(f"Chat turn {turn} of {num_turns}: queue={[s.name for s in speaker_queue]}")
+                # Select speaker from the first half of the queue
+                queue_size = len(speaker_queue)
+                if queue_size > 1:
+                    # Select from first half of the queue
+                    half_size = max(1, queue_size + 1 // 2)
+                    selected_index = random.randint(0, half_size - 1)
+                else:
+                    selected_index = 0
+                
+                current_ghost = speaker_queue[selected_index]
+                
+                # Move the selected speaker to the back of the queue
+                speaker_queue.pop(selected_index)
+                speaker_queue.append(current_ghost)
+                
+                try:
+                    # Activate the entity using the existing infrastructure
+                    await self.activate_ghost(current_ghost, ctx.message)
+                    
+                    # Add random delay between responses (2-10 seconds)
+                    if turn < num_turns - 1:  # Don't delay after the last turn
+                        delay = random.uniform(2.0, 10.0)
+                        await asyncio.sleep(delay)
 
-            except Exception as e:
-                await ctx.send(f"❌ **Error with {current_ghost.name}**: {str(e)}")
-                # Continue with next entity even if one fails
-                continue
-        
-        await ctx.send("🎭 Entity chat completed!")
+                except Exception as e:
+                    await ctx.send(f"❌ **Error with {current_ghost.name}**: {str(e)}")
+                    # Continue with next entity even if one fails
+                    continue
+            
+            await ctx.send("🎭 Entity chat completed!")
+            
+        finally:
+            # Always clear chat participants when done (whether completed or stopped)
+            channel_state.clear_chat_participants()
 
     async def cmd_stop(self, ctx, *args):
         """Stop all ghost activity in this channel for 30 seconds"""
