@@ -105,7 +105,18 @@ class GhostBot(commands.Bot):
 
         # Load ghosts from configured directory
         logger.info(f"📁 Looking for ghost configs in: {self.ghost_path}")
-        self.ghost_group = GhostGroup.load_from_directory(self.ghost_path)
+        try:
+            self.ghost_group = GhostGroup.load_from_directory(self.ghost_path)
+        except ValueError as e:
+            # Check if this is the specific "no bots available" error
+            if "No ghost config files found" in str(e) or "No ghosts were successfully loaded" in str(e):
+                logger.warning(f"⚠️  No ghost config files found in {self.ghost_path}")
+                logger.warning("⚠️  Please add ghost configuration files to the ghost_definitions directory")
+                # Initialize an empty ghost group so the bot can still function
+                self.ghost_group = GhostGroup()
+            else:
+                # Re-raise other ValueError exceptions
+                raise
 
         if len(self.ghost_group) > 0:
             logger.info(f"🎭 Ghost system ready with {len(self.ghost_group)} ghosts:")
