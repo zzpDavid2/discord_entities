@@ -1,0 +1,9 @@
+modules = ["python-3.12"]
+
+[nix]
+channel = "stable-24_05"
+
+[deployment]
+run = ["sh", "-c", "python run_ghosts.py"]
+deploymentTarget = "gce"
+ignorePorts = true
