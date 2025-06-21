@@ -63,7 +63,6 @@ class GhostBot(commands.Bot):
         self.add_command(commands.Command(self.cmd_list, name="list"))
         self.add_command(commands.Command(self.cmd_reload, name="reload"))
         self.add_command(commands.Command(self.cmd_status, name="status"))
-        self.add_command(commands.Command(self.cmd_test_ghost, name="test-ghost"))
         self.add_command(commands.Command(self.cmd_commands, name="commands"))
         self.add_command(commands.Command(self.cmd_stop, name="stop"))
         async def speak(ctx, *args):
@@ -495,54 +494,11 @@ class GhostBot(commands.Bot):
             else:
                 message += f"\n**LLM Configuration:** All entities using .env settings\n"
 
-            message += f"\n**Try:** `@{list(self.ghost_group.keys())[0]} hello` or `!test-ghost`"
+            message += f"\n**Try:** `@{list(self.ghost_group.keys())[0]} hello there!`"
         else:
             message += "⚠️ **No entities loaded!** Use `!reload-ghosts` to load them."
 
         await ctx.send(message)
-
-    async def cmd_test_ghost(self, ctx, ghost_handle: str = None):
-        """Test a specific entity or the first available one"""
-        if len(self.ghost_group) == 0:
-            await ctx.send("❌ No entities loaded! Use `!reload-ghosts` first.")
-            return
-
-        # Select entity
-        if ghost_handle:
-            ghost_key = ghost_handle.lower()  # Normalize to match stored handles
-            ghost = self.ghost_group.get(ghost_key)
-            if not ghost:
-                available = ", ".join(self.ghost_group.keys())
-                await ctx.send(
-                    f"❌ Entity '{ghost_handle}' not found! Available: {available}"
-                )
-                return
-        else:
-            ghost = list(self.ghost_group.values())[0]
-
-        # Test the entity
-        test_message = (
-            f"Hello {ghost.name}! This is a test to see if you're working properly."
-        )
-
-        try:
-            async with ctx.typing():
-                # Create a simple test conversation
-                test_messages = [
-                    {
-                        "role": "user",
-                        "content": f"{ctx.author.display_name}: {test_message}",
-                    }
-                ]
-
-                response = await ghost.call_llm(test_messages, max_tokens=200)
-
-                await ctx.send(
-                    f"✅ **Test successful for {ghost.name}:**\n\n{response}"
-                )
-
-        except Exception as e:
-            await ctx.send(f"❌ **Test failed for {ghost.name}:** {str(e)}")
 
     async def cmd_commands(self, ctx, *args):
         """List all available commands"""
@@ -567,7 +523,6 @@ class GhostBot(commands.Bot):
         message += "• `!list` - List all loaded entities\n"
         message += "• `!reload` - Reload entity configurations\n"
         message += "• `!status` - Show system status\n"
-        message += "• `!test-ghost [handle]` - Test a specific entity\n"
         message += "• `!stop` - Stop all ghost activity in this channel for 30 seconds\n"
         message += "• `!commands` - Show this help message\n"
 
