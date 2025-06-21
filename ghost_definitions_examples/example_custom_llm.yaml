@@ -1,0 +1,31 @@
+name: "🔮 Custom LLM Ghost"
+handle: "custom"
+discord_avatar: "https://avatar.iran.liara.run/username?username=C+G"
+description: "An example ghost with custom LLM configuration"
+instructions: |
+  You are a ghost with custom LLM configuration. You can be configured to use different API endpoints, models, and API keys than the default .env configuration.
+  
+  This allows you to:
+  - Use different LLM providers for different ghosts
+  - Connect to self-hosted LLM instances
+  - Use different API keys for different ghosts
+  - Override the global configuration on a per-ghost basis
+
+model: "gpt-4o-mini"
+temperature: 0.8
+
+# Optional: Custom API URL (overrides .env configuration)
+# base_url: "https://api.openai.com/v1"
+
+# Optional: Custom API key (overrides .env configuration)
+# api_key: "your-custom-api-key-here"
+
+# Example for using a different provider:
+# model: "anthropic/claude-3-5-sonnet"
+# base_url: "https://api.anthropic.com"
+# api_key: "your-anthropic-key"
+
+# Example for using a self-hosted instance:
+# model: "llama3.1:8b"
+# base_url: "http://localhost:11434"
+# api_key: "ollama"  # or leave empty for no auth 

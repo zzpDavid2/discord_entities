@@ -8,6 +8,7 @@ import discord
 from discord.ext import commands
 
 from .ghost_group import GhostGroup
+from .utils import shorten_str
 
 # Set up logging for this module
 logger = logging.getLogger(__name__)
@@ -233,7 +234,7 @@ class GhostBot(commands.Bot):
 
                             # Prepare webhook kwargs
                             webhook_kwargs = {
-                                "content": response,
+                                "content": shorten_str(response),
                                 "username": ghost.name,
                             }
 
@@ -260,9 +261,9 @@ class GhostBot(commands.Bot):
                     # Fallback to regular reply
                     logger.debug(f"🔄 {ghost.name} falling back to regular reply")
                     if message:
-                        await message.reply(f"**{ghost.name}**: {response}")
+                        await message.reply(f"**{ghost.name}**: {shorten_str(response)}")
                     else:
-                        await channel.send(f"**{ghost.name}**: {response}")
+                        await channel.send(f"**{ghost.name}**: {shorten_str(response)}")
 
                     elapsed = asyncio.get_event_loop().time() - start_time
                     logger.info(
@@ -281,9 +282,9 @@ class GhostBot(commands.Bot):
             error_msg = f"*{ghost.name} flickers and fades* Something went wrong in the spirit realm... ({str(e)[:100]})"
             try:
                 if message:
-                    await message.reply(error_msg)
+                    await message.reply(shorten_str(error_msg))
                 elif channel:
-                    await channel.send(error_msg)
+                    await channel.send(shorten_str(error_msg))
                 logger.warning(f"🔄 {ghost.name} sent error message to user")
             except Exception as reply_error:
                 logger.error(
@@ -382,7 +383,7 @@ class GhostBot(commands.Bot):
             # Only block if channel is stopped AND this is not a direct user mention
             if channel_state.is_stopped():
                 logger.info(f"Entity mentions blocked in #{message.channel.name} (channel stopped)")
-                await message.channel.send(f"**Dropping entity mentions ({', '.join(ghost.name for ghost in mentioned_ghosts)}) because entity activity is currently stopped in this channel**")
+                await message.channel.send(shorten_str(f"**Dropping entity mentions ({', '.join(ghost.name for ghost in mentioned_ghosts)}) because entity activity is currently stopped in this channel**"))
                 return
             
             # Filter out ghosts that are currently in a chat (unless it's a direct user mention)
@@ -434,9 +435,9 @@ class GhostBot(commands.Bot):
         message = "**Loaded Entities:**\n\n"
 
         for ghost_key, ghost in self.ghost_group:
-            message += f"**{ghost.name}** (`{ghost.handle}`) - {ghost.description[:35]}\n"
+            message += f"**{ghost.name}** (`{ghost.handle}`) - {shorten_str(ghost.description, 50)}\n"
 
-        await ctx.send(message[:1900])
+        await ctx.send(shorten_str(message))
 
     async def cmd_reload(self, ctx, *args):
         """Reload entity configurations from files"""
@@ -447,11 +448,11 @@ class GhostBot(commands.Bot):
 
         if new_count > 0:
             await ctx.send(
-                f"🔄 **Reloaded {new_count} entities** (was {old_count})\n\nUse `!list` to see the updated list."
+                shorten_str(f"🔄 **Reloaded {new_count} entities** (was {old_count})\n\nUse `!list` to see the updated list.")
             )
         else:
             await ctx.send(
-                "❌ **No entities loaded!** Check your bots directory and file formats."
+                shorten_str("❌ **No entities loaded!** Check your bots directory and file formats.")
             )
 
     async def cmd_status(self, ctx, *args):
@@ -506,7 +507,7 @@ class GhostBot(commands.Bot):
         else:
             message += "⚠️ **No entities loaded!** Use `!reload-ghosts` to load them."
 
-        await ctx.send(message)
+        await ctx.send(shorten_str(message))
 
     async def cmd_commands(self, ctx, *args):
         """List all available commands"""
@@ -534,19 +535,19 @@ class GhostBot(commands.Bot):
         message += "• `!stop` - Stop all ghost activity in this channel for 30 seconds\n"
         message += "• `!commands` - Show this help message\n"
 
-        await ctx.send(message)
+        await ctx.send(shorten_str(message))
 
     async def cmd_speak(self, ctx, *ghost_handles):
         """Make specific entities speak in sequence"""
         logger.info(f"Speaking with {ghost_handles!r}")
         if len(self.ghost_group) == 0:
-            await ctx.send("❌ No entities loaded! Use `!reload` first.")
+            await ctx.send(shorten_str("❌ No entities loaded! Use `!reload` first."))
             return
 
         # filter for valid entity handles
         handles = [handle for handle in ghost_handles if handle in self.ghost_group.keys()]
         if len(handles) != len(ghost_handles):
-            await ctx.send(f"❌ Some invalid entity handles were provided: {', '.join(ghost_handles)}")
+            await ctx.send(shorten_str(f"❌ Some invalid entity handles were provided: {', '.join(ghost_handles)}"))
             return
 
         # If no entities specified, use all available entities, randomize order
@@ -563,10 +564,10 @@ class GhostBot(commands.Bot):
             if ghost:
                 ghosts_to_speak.append(ghost)
             else:
-                await ctx.send(f"⚠️ Entity '{handle}' not found, skipping...")
+                await ctx.send(shorten_str(f"⚠️ Entity '{handle}' not found, skipping..."))
 
         if not ghosts_to_speak:
-            await ctx.send("❌ No valid entities found to speak!")
+            await ctx.send(shorten_str("❌ No valid entities found to speak!"))
             return
 
         # Make each entity speak in turn
@@ -574,7 +575,7 @@ class GhostBot(commands.Bot):
         for ghost in ghosts_to_speak:
             # Check if channel is still stopped before each ghost speaks
             if channel_state.is_stopped():
-                await ctx.send("🛑 **Entity activity was stopped during !speak command.**")
+                await ctx.send(shorten_str("🛑 **Entity activity was stopped during !speak command.**"))
                 return
                 
             try:
@@ -586,13 +587,13 @@ class GhostBot(commands.Bot):
                     await asyncio.sleep(delay)
 
             except Exception as e:
-                await ctx.send(f"❌ **Error with {ghost.name}**: {str(e)}")
+                await ctx.send(shorten_str(f"❌ **Error with {ghost.name}**: {str(e)}"))
 
     async def cmd_ghost_chat(self, ctx, *args):
         """Start a conversation between multiple entities"""
         logger.info(f"Starting entity chat with {args!r}")
         if len(self.ghost_group) < 2:
-            await ctx.send("❌ Need at least 2 entities for an entity chat! Use `!reload` to load more entities.")
+            await ctx.send(shorten_str("❌ Need at least 2 entities for an entity chat! Use `!reload` to load more entities."))
             return
 
         # Parse arguments - look for numerical argument for turns
@@ -631,14 +632,14 @@ class GhostBot(commands.Bot):
             if ghost:
                 valid_ghosts.append(ghost)
             else:
-                await ctx.send(f"⚠️ Entity '{handle}' not found, skipping...")
+                await ctx.send(shorten_str(f"⚠️ Entity '{handle}' not found, skipping..."))
 
         if len(valid_ghosts) < 2:
-            await ctx.send("❌ Need at least 2 valid entities for a chat!")
+            await ctx.send(shorten_str("❌ Need at least 2 valid entities for a chat!"))
             return
 
         # Start the entity conversation
-        await ctx.send(f"🎭 Starting entity chat with: {', '.join(ghost.name for ghost in valid_ghosts)} ({num_turns} turns)")
+        await ctx.send(shorten_str(f"🎭 Starting entity chat with: {', '.join(ghost.name for ghost in valid_ghosts)} ({num_turns} turns)"))
         
         # Add all participants to the chat list
         channel_state = self.get_channel_state(ctx.channel.id)
@@ -654,7 +655,7 @@ class GhostBot(commands.Bot):
             for turn in range(num_turns):
                 # Check if channel is still stopped before each turn
                 if channel_state.is_stopped():
-                    await ctx.send("🛑 **Entity activity was stopped during !chat command.**")
+                    await ctx.send(shorten_str("🛑 **Entity activity was stopped during !chat command.**"))
                     return
                 
                 # Select speaker from the first half of the queue
@@ -683,11 +684,11 @@ class GhostBot(commands.Bot):
                         await asyncio.sleep(delay)
 
                 except Exception as e:
-                    await ctx.send(f"❌ **Error with {current_ghost.name}**: {str(e)}")
+                    await ctx.send(shorten_str(f"❌ **Error with {current_ghost.name}**: {str(e)}"))
                     # Continue with next entity even if one fails
                     continue
             
-            await ctx.send("🎭 Entity chat completed!")
+            await ctx.send(shorten_str("🎭 Entity chat completed!"))
             
         finally:
             # Always clear chat participants when done (whether completed or stopped)
@@ -697,14 +698,14 @@ class GhostBot(commands.Bot):
         """Stop all ghost activity in this channel for 30 seconds"""
         channel_state = self.get_channel_state(ctx.channel.id)
         channel_state.stop()
-        await ctx.send("**Entity activity stopped in this channel for 30 seconds!**")
+        await ctx.send(shorten_str("**Entity activity stopped in this channel for 30 seconds!**"))
 
     async def on_command_error(self, ctx, error):
         """Handle command errors"""
         if isinstance(error, commands.CommandNotFound):
             # Get list of valid commands
             valid_commands = ", ".join(f"!{cmd.name}" for cmd in self.commands)
-            await ctx.send(f"❓ Unknown command. Valid commands: {valid_commands}")
+            await ctx.send(shorten_str(f"❓ Unknown command. Valid commands: {valid_commands}"))
             return
 
         # Let other errors propagate

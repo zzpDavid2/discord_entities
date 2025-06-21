@@ -1,0 +1,11 @@
+{
+    "name": "🔮 Custom LLM Ghost (JSON)",
+    "handle": "customjson",
+    "discord_avatar": "https://avatar.iran.liara.run/username?username=CJ+G",
+    "description": "An example ghost with custom LLM configuration in JSON format",
+    "instructions": "You are a ghost with custom LLM configuration defined in JSON format. This demonstrates how to use the new per-ghost LLM configuration features.",
+    "model": "gpt-4o-mini",
+    "temperature": 0.8,
+    "base_url": "https://api.openai.com/v1",
+    "api_key": "your-custom-api-key-here"
+} 
