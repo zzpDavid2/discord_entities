@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import random
+import time
 from typing import Dict, List, Optional
 
 import discord
@@ -10,6 +11,20 @@ from .ghost_group import GhostGroup
 
 # Set up logging for this module
 logger = logging.getLogger(__name__)
+
+
+class Channel:
+    """Simple channel state tracking"""
+    def __init__(self):
+        self.last_stop_time = 0  # Unix timestamp when !stop was last called
+
+    def is_stopped(self) -> bool:
+        """Check if channel is currently stopped (within 30 seconds of last stop)"""
+        return time.time() - self.last_stop_time < 30
+
+    def stop(self):
+        """Mark channel as stopped"""
+        self.last_stop_time = time.time()
 
 
 class GhostBot(commands.Bot):
@@ -30,6 +45,7 @@ class GhostBot(commands.Bot):
 
         self.ghost_group = GhostGroup()
         self.channel_webhooks: Dict[int, discord.Webhook] = {}
+        self.channels: Dict[int, Channel] = {}  # channel_id -> Channel
         self.message_limit = message_limit
         self.ghost_path = ghost_path
         assert self.ghost_path is not None, "ghost_path must be provided"
@@ -49,6 +65,7 @@ class GhostBot(commands.Bot):
         self.add_command(commands.Command(self.cmd_status, name="status"))
         self.add_command(commands.Command(self.cmd_test_ghost, name="test-ghost"))
         self.add_command(commands.Command(self.cmd_commands, name="commands"))
+        self.add_command(commands.Command(self.cmd_stop, name="stop"))
         async def speak(ctx, *args):
             return await self.cmd_speak(ctx, *args)
         self.add_command(commands.Command(speak, name="speak", rest_is_raw=True))
@@ -58,6 +75,20 @@ class GhostBot(commands.Bot):
 
         # Add error handler for unknown commands
         self.add_listener(self.on_command_error, "on_command_error")
+
+    def get_channel_state(self, channel_id: int) -> Channel:
+        """Get or create channel state"""
+        if channel_id not in self.channels:
+            self.channels[channel_id] = Channel()
+        return self.channels[channel_id]
+
+    def is_direct_user_mention(self, message) -> bool:
+        """Check if this is a direct mention of the bot by a user (not a ghost)"""
+        return (
+            self.user.mentioned_in(message) and 
+            not message.author.bot and
+            not (hasattr(message, "webhook_id") and message.webhook_id)
+        )
 
     def set_message_limit(self, limit: int):
         """Set the message limit for all entities"""
@@ -74,14 +105,14 @@ class GhostBot(commands.Bot):
         webhook = None
 
         for wh in webhooks:
-            if wh.name == "GhostBot LLM":
+            if wh.name == "Entity Bot":
                 webhook = wh
                 break
 
         # Create webhook if it doesn't exist
         if not webhook:
             try:
-                webhook = await channel.create_webhook(name="GhostBot LLM")
+                webhook = await channel.create_webhook(name="Entity Bot")
             except discord.Forbidden:
                 return None
 
@@ -326,7 +357,15 @@ class GhostBot(commands.Bot):
                     if ghost not in mentioned_ghosts:
                         mentioned_ghosts.append(ghost)
 
+        # Check if channel is stopped before processing any ghost mentions
+        channel_state = self.get_channel_state(message.channel.id)
         if mentioned_ghosts or is_direct_mention:
+            # Only block if channel is stopped AND this is not a direct user mention
+            if channel_state.is_stopped():
+                logger.info(f"Entity mentions blocked in #{message.channel.name} (channel stopped)")
+                await message.channel.send(f"**Dropping entity mentions ({', '.join(ghost.name for ghost in mentioned_ghosts)}) because entity activity is currently stopped in this channel**")
+                return
+            
             # If no specific entities selected and it's a direct mention, a random entity is summoned
             if not mentioned_ghosts and is_direct_mention and len(self.ghost_group) > 0:
                 mentioned_ghosts = [random.choice(list(self.ghost_group.values()))]
@@ -420,6 +459,14 @@ class GhostBot(commands.Bot):
         message += f"**Loaded Entities:** {len(self.ghost_group)}\n"
         message += f"**Active Channels:** {len(self.channel_webhooks)}\n"
         message += f"**Webhooks:** {webhook_status}\n\n"
+
+        # Show channel stop status
+        channel_state = self.get_channel_state(ctx.channel.id)
+        if channel_state.is_stopped():
+            remaining_time = 30 - (time.time() - channel_state.last_stop_time)
+            message += f"🛑 **This Channel:** Stopped ({remaining_time:.1f}s remaining)\n\n"
+        else:
+            message += f"▶️ **This Channel:** Active\n\n"
 
         if len(self.ghost_group) > 0:
             message += "**Entity Models:**\n"
@@ -521,6 +568,7 @@ class GhostBot(commands.Bot):
         message += "• `!reload` - Reload entity configurations\n"
         message += "• `!status` - Show system status\n"
         message += "• `!test-ghost [handle]` - Test a specific entity\n"
+        message += "• `!stop` - Stop all ghost activity in this channel for 30 seconds\n"
         message += "• `!commands` - Show this help message\n"
 
         await ctx.send(message)
@@ -559,7 +607,13 @@ class GhostBot(commands.Bot):
             return
 
         # Make each entity speak in turn
+        channel_state = self.get_channel_state(ctx.channel.id)
         for ghost in ghosts_to_speak:
+            # Check if channel is still stopped before each ghost speaks
+            if channel_state.is_stopped():
+                await ctx.send("🛑 **Entity activity was stopped during !speak command.**")
+                return
+                
             try:
                 await self.activate_ghost(ghost, ctx.message)
 
@@ -603,6 +657,12 @@ class GhostBot(commands.Bot):
         
         # Run 10 turns of conversation
         for turn in range(10):
+            # Check if channel is still stopped before each turn
+            channel_state = self.get_channel_state(ctx.channel.id)
+            if channel_state.is_stopped():
+                await ctx.send("🛑 **Entity activity was stopped during !chat command.**")
+                return
+                
             # Select entity for this turn (cycle through them)
             current_ghost = valid_ghosts[turn % len(valid_ghosts)]
             
@@ -621,6 +681,12 @@ class GhostBot(commands.Bot):
                 continue
         
         await ctx.send("🎭 Entity chat completed!")
+
+    async def cmd_stop(self, ctx, *args):
+        """Stop all ghost activity in this channel for 30 seconds"""
+        channel_state = self.get_channel_state(ctx.channel.id)
+        channel_state.stop()
+        await ctx.send("**Entity activity stopped in this channel for 30 seconds!**")
 
     async def on_command_error(self, ctx, error):
         """Handle command errors"""
