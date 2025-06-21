@@ -434,36 +434,9 @@ class GhostBot(commands.Bot):
         message = "**Loaded Entities:**\n\n"
 
         for ghost_key, ghost in self.ghost_group:
-            message += f"**{ghost.name}**\n"
-            message += f"  • Handle: `@{ghost.handle}`\n"
-            message += f"  • Model: `{ghost.model}` (temp: {ghost.temperature})\n"
-            
-            # Show custom configuration if any
-            config_info = []
-            if ghost.base_url:
-                config_info.append(f"Custom API: {ghost.base_url}")
-            if ghost.api_key:
-                config_info.append("Custom API Key")
-            
-            if config_info:
-                message += f"  • Config: {', '.join(config_info)}\n"
-            
-            message += f"  • Description: {ghost.description}\n\n"
+            message += f"**{ghost.name}** (`{ghost.handle}`) - {ghost.description[:35]}\n"
 
-        message += "**Usage:**\n"
-        message += (
-            f"• `@{list(self.ghost_group.keys())[0]} hello there!` - Summon specific entity\n"
-        )
-        message += (
-            f"• `@{self.user.display_name} hello there!` - Summon a random entity\n"
-        )
-        message += "• Reply to any entity's message - Automatically summon that entity\n"
-        message += "• Reply + mention other entities - Multiple entities respond\n"
-        message += "• `@entity1 @entity2 message` - Tag multiple entities at once\n"
-        message += "• `!chat [entity1 entity2 ...] [number]` - Start a conversation between entities (optional: specify number of turns)\n"
-        message += "• `!reload` - Reload entity configurations"
-
-        await ctx.send(message)
+        await ctx.send(message[:1900])
 
     async def cmd_reload(self, ctx, *args):
         """Reload entity configurations from files"""
