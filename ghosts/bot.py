@@ -368,6 +368,17 @@ class GhostBot(commands.Bot):
             message += f"**{ghost.name}**\n"
             message += f"  • Handle: `@{ghost.handle}`\n"
             message += f"  • Model: `{ghost.model}` (temp: {ghost.temperature})\n"
+            
+            # Show custom configuration if any
+            config_info = []
+            if ghost.base_url:
+                config_info.append(f"Custom API: {ghost.base_url}")
+            if ghost.api_key:
+                config_info.append("Custom API Key")
+            
+            if config_info:
+                message += f"  • Config: {', '.join(config_info)}\n"
+            
             message += f"  • Description: {ghost.description}\n\n"
 
         message += "**Usage:**\n"
@@ -418,6 +429,24 @@ class GhostBot(commands.Bot):
 
             for model, count in model_counts.items():
                 message += f"  • {model}: {count} ghost(s)\n"
+
+            # Show ghost-specific configurations
+            custom_config_ghosts = []
+            for ghost in self.ghost_group.values():
+                if ghost.base_url or ghost.api_key:
+                    custom_config_ghosts.append(ghost)
+            
+            if custom_config_ghosts:
+                message += f"\n**Ghosts with Custom LLM Config:**\n"
+                for ghost in custom_config_ghosts:
+                    config_info = []
+                    if ghost.api_url:
+                        config_info.append(f"URL: {ghost.api_url}")
+                    if ghost.api_key:
+                        config_info.append("Custom API Key")
+                    message += f"  • {ghost.name}: {', '.join(config_info)}\n"
+            else:
+                message += f"\n**LLM Configuration:** All ghosts using .env settings\n"
 
             message += f"\n**Try:** `@{list(self.ghost_group.keys())[0]} hello` or `!test-ghost`"
         else:

@@ -35,6 +35,15 @@ class Ghost(BaseModel):
         le=2.0,
         description="LLM temperature parameter (None uses model default)",
     )
+    # New fields for ghost-specific LLM configuration
+    base_url: Optional[str] = Field(
+        default=None, 
+        description="Custom API URL for this ghost's LLM client (overrides .env configuration)"
+    )
+    api_key: Optional[str] = Field(
+        default=None,
+        description="Custom API key for this ghost's LLM client (overrides .env configuration)"
+    )
 
     class Config:
         # Allow extra fields for future extensibility
@@ -58,6 +67,16 @@ class Ghost(BaseModel):
         """Ensure temperature is in a reasonable range"""
         if v is not None and (v < 0 or v > 2):
             raise ValueError("Temperature must be between 0 and 2")
+        return v
+
+    @field_validator("api_url")
+    @classmethod
+    def validate_api_url(cls, v):
+        """Validate API URL format"""
+        if v is not None:
+            v = v.strip()
+            if not v.startswith(('http://', 'https://')):
+                raise ValueError("API URL must start with http:// or https://")
         return v
 
     async def call_llm(
@@ -98,6 +117,15 @@ class Ghost(BaseModel):
             # Only include temperature if it's explicitly set
             if self.temperature is not None:
                 completion_kwargs["temperature"] = self.temperature
+
+            # Add ghost-specific API configuration if provided
+            if self.base_url:
+                completion_kwargs["base_url"] = self.base_url
+                logger.debug(f"🔗 {self.name} using custom API URL: {self.base_url}")
+            
+            if self.api_key:
+                completion_kwargs["api_key"] = self.api_key
+                logger.debug(f"🔑 {self.name} using custom API key")
 
             # Call litellm async
             response = await acompletion(**completion_kwargs)
