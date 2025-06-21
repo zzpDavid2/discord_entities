@@ -69,9 +69,9 @@ class Ghost(BaseModel):
             raise ValueError("Temperature must be between 0 and 2")
         return v
 
-    @field_validator("api_url")
+    @field_validator("base_url")
     @classmethod
-    def validate_api_url(cls, v):
+    def validate_base_url(cls, v):
         """Validate API URL format"""
         if v is not None:
             v = v.strip()
@@ -121,6 +121,9 @@ class Ghost(BaseModel):
             # Add ghost-specific API configuration if provided
             if self.base_url:
                 completion_kwargs["base_url"] = self.base_url
+                assert self.model, "Model must be specified when using a custom API URL"
+                # litellm expects the model to be in the format "openai/<model>" for a custom API URL
+                completion_kwargs["model"] = "openai/" + self.model
                 logger.debug(f"🔗 {self.name} using custom API URL: {self.base_url}")
             
             if self.api_key:
