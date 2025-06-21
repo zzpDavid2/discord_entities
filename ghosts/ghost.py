@@ -123,8 +123,7 @@ class Ghost(BaseModel):
 
             # Add entity-specific API configuration if provided
             if self.base_url:
-                completion_kwargs["base_url"] = self.base_url
-                completion_kwargs["api_version"] = "v1"
+                completion_kwargs["api_base"] = self.base_url
                 assert self.model, "Model must be specified when using a custom API URL"
                 # litellm expects the model to be in the format "openai/<model>" for a custom API URL
                 completion_kwargs["model"] = "openai/" + self.model
@@ -239,7 +238,7 @@ class Ghost(BaseModel):
                 }
                 formatted_messages.append(formatted_msg)
                 logger.debug(
-                    f"👻 {self.name} found other entity message from {ghost_name}"
+                    f"{self.name} found other entity message from {ghost_name}"
                 )
 
             elif is_regular_bot:
