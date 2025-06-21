@@ -93,7 +93,7 @@ class Ghost(BaseModel):
         Returns:
             Generated response text
         """
-        litellm._turn_on_debug()
+        # litellm._turn_on_debug()
 
         logger.info(
             f"🧠 {self.name} calling LLM {self.model} with {len(messages)} messages, max_tokens={max_tokens}"
@@ -216,12 +216,11 @@ class Ghost(BaseModel):
                 and hasattr(msg.author, "name")
                 and self._normalize_name(msg.author.name) != self._normalize_name(self.name)
                 and hasattr(msg.author, "discriminator")
-                and msg.author.discriminator
-                == "0000"  # Webhook messages have discriminator 0000
+                and msg.author.discriminator == "0000"  # Webhook messages have discriminator 0000
             )
 
             # Check if this is a regular bot message (not webhook) - these are typically command responses
-            is_regular_bot = msg.author.bot and not hasattr(msg, "webhook_id")
+            is_regular_bot = msg.author.bot and not getattr(msg, "webhook_id", None)
 
             if is_current_ghost:
                 # This entity's own previous messages -> assistant role, no prefix
