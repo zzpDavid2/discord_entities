@@ -73,7 +73,11 @@ class GhostGroup:
 
         # Check if any handle appears in the message or pseudo-mentions
         for handle, ghost in self.ghosts.items():
-            if f"@{handle.lower()}" in message_lower or handle.lower() in pseudo_mentions and ghost not in mentioned_ghosts:
+            if (
+                f"@{handle.lower()}" in message_lower
+                or handle.lower() in pseudo_mentions
+                and ghost not in mentioned_ghosts
+            ):
                 mentioned_ghosts.append(ghost)
 
         return mentioned_ghosts
@@ -81,41 +85,42 @@ class GhostGroup:
     def _normalize_ghost_name(self, name: str) -> str:
         """
         Normalize an entity name by removing emojis and special characters
-        
+
         Args:
             name: The entity name to normalize
-            
+
         Returns:
             Normalized name with only letters, numbers, and spaces
         """
         import re
+
         # Remove emojis and special characters, keep letters, numbers, and spaces
-        normalized = re.sub(r'[^\w\s]', '', name, flags=re.UNICODE)
+        normalized = re.sub(r"[^\w\s]", "", name, flags=re.UNICODE)
         # Remove extra whitespace
-        normalized = ' '.join(normalized.split())
+        normalized = " ".join(normalized.split())
         return normalized.strip()
 
     def get_ghost_by_name(self, name: str) -> Optional[Ghost]:
         """
         Find an entity by their display name (case-insensitive)
-        
+
         Args:
             name: The entity's display name
-            
+
         Returns:
             Ghost instance if found, None otherwise
         """
         normalized_name = self._normalize_ghost_name(name).lower()
-        
+
         for ghost in self.ghosts.values():
             if self._normalize_ghost_name(ghost.name).lower() == normalized_name:
                 return ghost
-                
+
         return None
 
     @classmethod
     def load_from_directory(
-        cls, directory: str, ignore_errors: bool = False
+        cls, directory: str, ignore_errors: bool = True
     ) -> "GhostGroup":
         """
         Load all entity configurations from a directory
@@ -167,8 +172,9 @@ class GhostGroup:
                     raise ValueError(
                         f"Failed to load entity from {file_path}: {str(e)}"
                     ) from e
-                logger.warning(
-                    f"⚠️  Skipping failed entity load from {file_path}: {str(e)}"
+                logger.error(
+                    f"⚠️  Skipping failed entity load from {file_path}: {str(e)}",
+                    exc_info=True,
                 )
 
         if len(ghost_group) == 0 and not ignore_errors:
