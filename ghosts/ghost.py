@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 from litellm import acompletion
+import litellm
 
 # Set up logging for this module
 logger = logging.getLogger(__name__)
@@ -15,16 +16,16 @@ SYSTEM_PROMPT = """
 
 
 class Ghost(BaseModel):
-    """A digital ghost with LLM capabilities"""
+    """A digital entity with LLM capabilities"""
 
-    name: str = Field(..., description="Display name of the ghost")
+    name: str = Field(..., description="Display name of the entity")
     handle: str = Field(
         ..., description="Handle/username for mentions and identification"
     )
     discord_avatar: Optional[HttpUrl] = Field(
         default=None, description="Avatar URL for webhook display (None uses default)"
     )
-    description: str = Field(..., description="Brief description of the ghost")
+    description: str = Field(..., description="Brief description of the entity")
     instructions: str = Field(
         ..., description="System prompt/personality instructions for the LLM"
     )
@@ -35,14 +36,14 @@ class Ghost(BaseModel):
         le=2.0,
         description="LLM temperature parameter (None uses model default)",
     )
-    # New fields for ghost-specific LLM configuration
+    # New fields for entity-specific LLM configuration
     base_url: Optional[str] = Field(
         default=None, 
-        description="Custom API URL for this ghost's LLM client (overrides .env configuration)"
+        description="Custom API URL for this entity's LLM client (overrides .env configuration)"
     )
     api_key: Optional[str] = Field(
         default=None,
-        description="Custom API key for this ghost's LLM client (overrides .env configuration)"
+        description="Custom API key for this entity's LLM client (overrides .env configuration)"
     )
 
     class Config:
@@ -92,6 +93,8 @@ class Ghost(BaseModel):
         Returns:
             Generated response text
         """
+        litellm._turn_on_debug()
+
         logger.info(
             f"🧠 {self.name} calling LLM {self.model} with {len(messages)} messages, max_tokens={max_tokens}"
         )
@@ -118,9 +121,10 @@ class Ghost(BaseModel):
             if self.temperature is not None:
                 completion_kwargs["temperature"] = self.temperature
 
-            # Add ghost-specific API configuration if provided
+            # Add entity-specific API configuration if provided
             if self.base_url:
                 completion_kwargs["base_url"] = self.base_url
+                completion_kwargs["api_version"] = "v1"
                 assert self.model, "Model must be specified when using a custom API URL"
                 # litellm expects the model to be in the format "openai/<model>" for a custom API URL
                 completion_kwargs["model"] = "openai/" + self.model
@@ -198,7 +202,7 @@ class Ghost(BaseModel):
                 )
                 continue
 
-            # Check if this message is from the current ghost (via webhook)
+            # Check if this message is from the current entity (via webhook)
             is_current_ghost = (
                 hasattr(msg, "webhook_id")
                 and msg.webhook_id
@@ -206,7 +210,7 @@ class Ghost(BaseModel):
                 and self._normalize_name(msg.author.name) == self._normalize_name(self.name)
             )
 
-            # Check if this message is from another ghost (webhook with different name)
+            # Check if this message is from another entity (webhook with different name)
             is_other_ghost = (
                 hasattr(msg, "webhook_id")
                 and msg.webhook_id
@@ -221,13 +225,13 @@ class Ghost(BaseModel):
             is_regular_bot = msg.author.bot and not hasattr(msg, "webhook_id")
 
             if is_current_ghost:
-                # This ghost's own previous messages -> assistant role, no prefix
+                # This entity's own previous messages -> assistant role, no prefix
                 formatted_msg = {"role": "assistant", "content": msg.content}
                 formatted_messages.append(formatted_msg)
                 logger.debug(f"💬 {self.name} found own message: {msg.content[:50]}...")
 
             elif is_other_ghost:
-                # Another ghost's message -> user role with ghost name
+                # Another entity's message -> user role with entity name
                 ghost_name = msg.author.name
                 formatted_msg = {
                     "role": "user",
@@ -235,7 +239,7 @@ class Ghost(BaseModel):
                 }
                 formatted_messages.append(formatted_msg)
                 logger.debug(
-                    f"👻 {self.name} found other ghost message from {ghost_name}"
+                    f"👻 {self.name} found other entity message from {ghost_name}"
                 )
 
             elif is_regular_bot:
@@ -263,15 +267,15 @@ class Ghost(BaseModel):
         return limited_messages
 
     def __str__(self) -> str:
-        return f"Ghost(@{self.handle}, {self.name}, model={self.model})"
+        return f"Entity(@{self.handle}, {self.name}, model={self.model})"
 
     @classmethod
     def load_from_file(cls, file_path: Path) -> "Ghost":
         """
-        Load a single ghost from a file
+        Load a single entity from a file
 
         Args:
-            file_path: Path to the ghost configuration file
+            file_path: Path to the entity configuration file
 
         Returns:
             Ghost instance
@@ -280,7 +284,7 @@ class Ghost(BaseModel):
             ValueError: If the file cannot be loaded or parsed
         """
         try:
-            logger.debug(f"📖 Reading ghost file: {file_path}")
+            logger.debug(f"📖 Reading entity file: {file_path}")
 
             with open(file_path, "r", encoding="utf-8") as f:
                 if file_path.suffix.lower() == ".json":
@@ -294,11 +298,11 @@ class Ghost(BaseModel):
 
             # Validate and create Ghost instance
             ghost = cls(**data)
-            logger.debug(f"✅ Created ghost instance: {ghost.name}")
+            logger.debug(f"✅ Created entity instance: {ghost.name}")
             return ghost
 
         except Exception as e:
-            error_msg = f"Error loading ghost from {file_path}: {type(e).__name__}: {e}"
+            error_msg = f"Error loading entity from {file_path}: {type(e).__name__}: {e}"
             logger.error(f"❌ {error_msg}")
             logger.debug(
                 f"🔍 File loading error details for {file_path}", exc_info=True
