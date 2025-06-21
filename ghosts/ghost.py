@@ -250,9 +250,9 @@ class Ghost(BaseModel):
                             break
 
                 content = (
-                    f"{ghost_name}: {msg.content}"
+                    f"{ghost_name}:\n{msg.content}"
                     if not ghost_handle
-                    else f"{ghost_name} (@{ghost_handle}): {msg.content}"
+                    else f"{ghost_name} (Discord handle: {ghost_handle}):\n{msg.content}"
                 )
                 formatted_msg = {
                     "role": "user",
