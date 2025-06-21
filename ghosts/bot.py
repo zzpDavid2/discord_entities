@@ -52,6 +52,7 @@ class GhostBot(commands.Bot):
         self.add_command(commands.Command(self.cmd_status, name="status"))
         self.add_command(commands.Command(self.cmd_test_ghost, name="test-ghost"))
         self.add_command(commands.Command(self.cmd_commands, name="commands"))
+        self.add_command(commands.Command(self.cmd_ghost_chat, name="ghost-chat"))
 
         # Add error handler for unknown commands
         self.add_listener(self.on_command_error, "on_command_error")
@@ -248,13 +249,15 @@ class GhostBot(commands.Bot):
             return
         self._last_processed_message = message.id
 
-        # Don't respond to bot messages
-        if message.author.bot:
+        # Don't respond to regular bot messages (but allow webhook messages from ghosts)
+        if message.author.bot and not (hasattr(message, "webhook_id") and message.webhook_id):
             return
 
-        # Process commands first
+        # Process commands first (but only for non-ghost messages)
         if message.content.startswith(self.command_prefix):
-            await self.process_commands(message)
+            # Only process commands from non-ghost messages
+            if not (hasattr(message, "webhook_id") and message.webhook_id):
+                await self.process_commands(message)
             return
 
         # Handle mentions and pseudo-mentions
@@ -275,12 +278,11 @@ class GhostBot(commands.Bot):
                 )
 
         # Check for pseudo-mentions like "@tomas", "@anna"
-        if not is_direct_mention:
-            mentioned_ghosts = self.ghost_group.find_ghost_by_mention(message.content)
-            if mentioned_ghosts:
-                logger.debug(
-                    f"👻 Pseudo-mentions detected for: {', '.join(ghost.name for ghost in mentioned_ghosts)} from {message.author.display_name}"
-                )
+        mentioned_ghosts = self.ghost_group.find_ghost_by_mention(message.content)
+        if mentioned_ghosts:
+            logger.debug(
+                f"👻 Pseudo-mentions detected for: {', '.join(ghost.name for ghost in mentioned_ghosts)} from {message.author.display_name}"
+            )
 
         # Check for replies to ghost messages
         if message.reference:
@@ -306,6 +308,21 @@ class GhostBot(commands.Bot):
                             )
             except Exception as e:
                 logger.debug(f"Could not fetch referenced message: {e}")
+
+        # NEW: Check if this message is from a ghost and contains mentions of other ghosts
+        if (hasattr(message, "webhook_id") and message.webhook_id and 
+            hasattr(message.author, "discriminator") and message.author.discriminator == "0000"):
+            
+            # This is a ghost message - check if it mentions other ghosts
+            ghost_mentions = self.ghost_group.find_ghost_by_mention(message.content)
+            if ghost_mentions:
+                logger.debug(
+                    f"👻 Ghost {message.author.name} is mentioning other ghosts: {', '.join(ghost.name for ghost in ghost_mentions)}"
+                )
+                # Add mentioned ghosts to the response list
+                for ghost in ghost_mentions:
+                    if ghost not in mentioned_ghosts:
+                        mentioned_ghosts.append(ghost)
 
         if mentioned_ghosts or is_direct_mention:
             # If no specific ghosts selected and it's a direct mention, a random ghost is summoned
@@ -360,6 +377,8 @@ class GhostBot(commands.Bot):
         )
         message += "• Reply to any ghost's message - Automatically summon that ghost\n"
         message += "• Reply + mention other ghosts - Multiple ghosts respond\n"
+        message += "• `@ghost1 @ghost2 message` - Tag multiple ghosts at once\n"
+        message += "• `!ghost-chat` - Start a conversation between all ghosts\n"
         message += "• `!reload` - Reload ghost configurations"
 
         await ctx.send(message)
@@ -457,9 +476,14 @@ class GhostBot(commands.Bot):
         message += "• `@bot_name message` - Summon first available ghost\n"
         message += "• Reply to any ghost's message - Automatically summon that ghost\n"
         message += "• Reply + mention other ghosts - Multiple ghosts respond\n"
-        message += (
-            "• `!speak ghost1 ghost2 ...` - Make specific ghosts speak in sequence\n\n"
-        )
+        message += "• `!speak ghost1 ghost2 ...` - Make specific ghosts speak in sequence\n"
+        message += "• `!ghost-chat [ghost1 ghost2 ...]` - Start a conversation between ghosts\n\n"
+
+        message += "**Ghost-to-Ghost Features:**\n"
+        message += "• Ghosts can tag each other with @ghostname\n"
+        message += "• Ghosts automatically respond when tagged by other ghosts\n"
+        message += "• Ghosts can reply to each other's messages\n"
+        message += "• Ghosts maintain context of other ghosts' messages\n\n"
 
         message += "**Management Commands:**\n"
         message += "• `!list` - List all loaded ghosts\n"
@@ -510,6 +534,56 @@ class GhostBot(commands.Bot):
 
             except Exception as e:
                 await ctx.send(f"❌ **Error with {ghost.name}**: {str(e)}")
+
+    async def cmd_ghost_chat(self, ctx, *args):
+        """Start a conversation between multiple ghosts"""
+        if len(self.ghost_group) < 2:
+            await ctx.send("❌ Need at least 2 ghosts for a ghost chat! Use `!reload` to load more ghosts.")
+            return
+
+        # Parse arguments for ghost handles
+        if args:
+            ghost_handles = [arg.lower() for arg in args]
+        else:
+            # Use all available ghosts if none specified
+            ghost_handles = list(self.ghost_group.keys())
+
+        # Validate ghost handles
+        valid_ghosts = []
+        for handle in ghost_handles:
+            ghost = self.ghost_group.get(handle)
+            if ghost:
+                valid_ghosts.append(ghost)
+            else:
+                await ctx.send(f"⚠️ Ghost '{handle}' not found, skipping...")
+
+        if len(valid_ghosts) < 2:
+            await ctx.send("❌ Need at least 2 valid ghosts for a chat!")
+            return
+
+        # Start the ghost conversation
+        await ctx.send(f"🎭 Starting ghost chat with: {', '.join(ghost.name for ghost in valid_ghosts)}")
+        
+        # Run 10 turns of conversation
+        for turn in range(10):
+            # Select ghost for this turn (cycle through them)
+            current_ghost = valid_ghosts[turn % len(valid_ghosts)]
+            
+            try:
+                # Activate the ghost using the existing infrastructure
+                await self.activate_ghost(current_ghost, ctx.message)
+                
+                # Add random delay between responses (2-10 seconds)
+                if turn < 9:  # Don't delay after the last turn
+                    delay = random.uniform(2.0, 10.0)
+                    await asyncio.sleep(delay)
+
+            except Exception as e:
+                await ctx.send(f"❌ **Error with {current_ghost.name}**: {str(e)}")
+                # Continue with next ghost even if one fails
+                continue
+        
+        await ctx.send("🎭 Ghost chat completed!")
 
     async def on_command_error(self, ctx, error):
         """Handle command errors"""

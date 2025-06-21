@@ -115,9 +115,11 @@ COHERE_API_KEY=your_cohere_key_here
 - `@GhostBot help` - Summon first available ghost
 - Reply to any ghost's message - Automatically summon that ghost
 - Reply + mention other ghosts - Multiple ghosts respond
+- `@ghost1 @ghost2 message` - Tag multiple ghosts at once
 - `!ghosts` - List all loaded ghosts
 - `!test-ghost mybot` - Test a specific ghost
 - `!reload-ghosts` - Reload ghost configurations
+- `!ghost-chat` - Start a conversation between all ghosts
 
 #### Features
 
@@ -126,6 +128,8 @@ COHERE_API_KEY=your_cohere_key_here
 - **Multiple LLM Support**: Works with OpenAI, Anthropic, Cohere, and more
 - **Hot Reloading**: Update ghost configs without restarting
 - **Webhook Integration**: Ghosts appear as separate users
+- **Ghost-to-Ghost Interactions**: Ghosts can tag and respond to each other
+- **Enhanced Conversations**: Ghosts can debate, collaborate, and build on each other's ideas
 
 ## Troubleshooting
 

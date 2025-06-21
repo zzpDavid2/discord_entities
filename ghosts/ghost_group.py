@@ -63,24 +63,56 @@ class GhostGroup:
         """Find all ghosts being mentioned in the message"""
         import re
 
+        logger.info(f"👻 Finding ghosts by mention in {message_content!r}")
         message_lower = message_content.lower()
         mentioned_ghosts = []
 
         # Check for pseudo-mentions like "@tomas", "@anna"
         pseudo_mention_pattern = r"@(\w+)"
         pseudo_mentions = re.findall(pseudo_mention_pattern, message_lower)
+        pseudo_mentions = [mention.lower() for mention in pseudo_mentions]
 
-        # Check direct mentions by handle
-        for mention in pseudo_mentions:
-            if mention in self.ghosts:
-                mentioned_ghosts.append(self.ghosts[mention])
-
-        # Check if any handle appears in the message
+        # Check if any handle appears in the message or pseudo-mentions
         for handle, ghost in self.ghosts.items():
-            if handle in message_lower and ghost not in mentioned_ghosts:
+            if f"@{handle.lower()}" in message_lower or handle.lower() in pseudo_mentions and ghost not in mentioned_ghosts:
                 mentioned_ghosts.append(ghost)
 
         return mentioned_ghosts
+
+    def _normalize_ghost_name(self, name: str) -> str:
+        """
+        Normalize a ghost name by removing emojis and special characters
+        
+        Args:
+            name: The ghost name to normalize
+            
+        Returns:
+            Normalized name with only letters, numbers, and spaces
+        """
+        import re
+        # Remove emojis and special characters, keep letters, numbers, and spaces
+        normalized = re.sub(r'[^\w\s]', '', name, flags=re.UNICODE)
+        # Remove extra whitespace
+        normalized = ' '.join(normalized.split())
+        return normalized.strip()
+
+    def get_ghost_by_name(self, name: str) -> Optional[Ghost]:
+        """
+        Find a ghost by their display name (case-insensitive)
+        
+        Args:
+            name: The ghost's display name
+            
+        Returns:
+            Ghost instance if found, None otherwise
+        """
+        normalized_name = self._normalize_ghost_name(name).lower()
+        
+        for ghost in self.ghosts.values():
+            if self._normalize_ghost_name(ghost.name).lower() == normalized_name:
+                return ghost
+                
+        return None
 
     @classmethod
     def load_from_directory(
