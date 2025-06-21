@@ -684,17 +684,17 @@ class GhostBot(commands.Bot):
                     await ctx.send("🛑 **Entity activity was stopped during !chat command.**")
                     return
                 
-                logger.info(f"Chat turn {turn} of {num_turns}: queue={[s.name for s in speaker_queue]}")
                 # Select speaker from the first half of the queue
                 queue_size = len(speaker_queue)
                 if queue_size > 1:
                     # Select from first half of the queue
-                    half_size = max(1, queue_size + 1 // 2)
+                    half_size = max(1, (queue_size + 1) // 2)
                     selected_index = random.randint(0, half_size - 1)
                 else:
                     selected_index = 0
                 
                 current_ghost = speaker_queue[selected_index]
+                logger.info(f"Chat turn {turn} of {num_turns}: queue={[s.handle for s in speaker_queue]}, selected={selected_index} ({current_ghost.handle})")
                 
                 # Move the selected speaker to the back of the queue
                 speaker_queue.pop(selected_index)
