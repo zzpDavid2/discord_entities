@@ -63,7 +63,6 @@ class GhostGroup:
         """Find all ghosts being mentioned in the message"""
         import re
 
-        logger.info(f"👻 Finding ghosts by mention in {message_content!r}")
         message_lower = message_content.lower()
         mentioned_ghosts = []
 

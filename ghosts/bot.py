@@ -44,15 +44,17 @@ class GhostBot(commands.Bot):
         logger.debug("Event handlers registered")
 
         # Register commands
-        self.add_command(
-            commands.Command(self.cmd_speak, name="speak", rest_is_raw=True)
-        )
         self.add_command(commands.Command(self.cmd_list, name="list"))
         self.add_command(commands.Command(self.cmd_reload, name="reload"))
         self.add_command(commands.Command(self.cmd_status, name="status"))
         self.add_command(commands.Command(self.cmd_test_ghost, name="test-ghost"))
         self.add_command(commands.Command(self.cmd_commands, name="commands"))
-        self.add_command(commands.Command(self.cmd_ghost_chat, name="ghost-chat"))
+        async def speak(ctx, *args):
+            return await self.cmd_speak(ctx, *args)
+        self.add_command(commands.Command(speak, name="speak", rest_is_raw=True))
+        async def ghost_chat(ctx, *args):
+            return await self.cmd_ghost_chat(ctx, *args)
+        self.add_command(commands.Command(ghost_chat, name="ghost-chat"))
 
         # Add error handler for unknown commands
         self.add_listener(self.on_command_error, "on_command_error")
@@ -494,20 +496,25 @@ class GhostBot(commands.Bot):
 
         await ctx.send(message)
 
-    async def cmd_speak(self, ctx, ghost_handles: str = None):
+    async def cmd_speak(self, ctx, *ghost_handles):
         """Make specific ghosts speak in sequence"""
+        logger.info(f"👻 Speaking with {ghost_handles!r}")
         if len(self.ghost_group) == 0:
             await ctx.send("❌ No ghosts loaded! Use `!reload` first.")
             return
 
-        # Parse ghost handles from the raw argument
-        handles = ghost_handles.split() if ghost_handles else []
-        logger.info(f"👻 Speaking with {handles!r}")
+        # filter for valid ghost handles
+        handles = [handle for handle in ghost_handles if handle in self.ghost_group.keys()]
+        if len(handles) != len(ghost_handles):
+            await ctx.send(f"❌ Some invalid ghost handles were provided: {', '.join(ghost_handles)}")
+            return
 
         # If no ghosts specified, use all available ghosts, randomize order
         if not handles:
             handles = list(self.ghost_group.keys())
             random.shuffle(handles)
+
+        logger.info(f"👻 Speaking with {handles!r}")
 
         # Find the ghosts
         ghosts_to_speak = []
@@ -537,6 +544,7 @@ class GhostBot(commands.Bot):
 
     async def cmd_ghost_chat(self, ctx, *args):
         """Start a conversation between multiple ghosts"""
+        logger.info(f"👻 Starting ghost chat with {args!r}")
         if len(self.ghost_group) < 2:
             await ctx.send("❌ Need at least 2 ghosts for a ghost chat! Use `!reload` to load more ghosts.")
             return
