@@ -271,6 +271,30 @@ class GhostBot(commands.Bot):
                     f"👻 Pseudo-mentions detected for: {', '.join(ghost.name for ghost in mentioned_ghosts)} from {message.author.display_name}"
                 )
 
+        # Check for replies to ghost messages
+        if message.reference:
+            try:
+                # Fetch the referenced message
+                referenced_message = await message.channel.fetch_message(message.reference.message_id)
+                
+                # Check if the referenced message was sent by a ghost
+                ghost_handle = self.identify_ghost_from_message(referenced_message)
+                if ghost_handle:
+                    ghost = self.ghost_group.get(ghost_handle)
+                    if ghost:
+                        # Add the replied-to ghost to the list if not already present
+                        if ghost not in mentioned_ghosts:
+                            mentioned_ghosts.insert(0, ghost)
+                            logger.debug(
+                                f"💬 Reply detected to {ghost.name}'s message from {message.author.display_name}"
+                            )
+                        else:
+                            logger.debug(
+                                f"💬 Reply to {ghost.name}'s message, but {ghost.name} already mentioned in message"
+                            )
+            except Exception as e:
+                logger.debug(f"Could not fetch referenced message: {e}")
+
         if mentioned_ghosts or is_direct_mention:
             # If no specific ghosts selected and it's a direct mention, a random ghost is summoned
             if not mentioned_ghosts and is_direct_mention and len(self.ghost_group) > 0:
@@ -280,10 +304,19 @@ class GhostBot(commands.Bot):
                 )
 
             if mentioned_ghosts:
+                # Remove duplicates while preserving order
+                unique_ghosts = []
+                seen_ghosts = set()
                 for ghost in mentioned_ghosts:
-                    logger.info(
-                        f"👻 Summoning {ghost.name} for {message.author.display_name} in #{message.channel.name}"
-                    )
+                    if ghost.name not in seen_ghosts:
+                        unique_ghosts.append(ghost)
+                        seen_ghosts.add(ghost.name)
+                
+                logger.info(
+                    f"👻 Summoning {len(unique_ghosts)} ghost(s) for {message.author.display_name} in #{message.channel.name}: {', '.join(ghost.name for ghost in unique_ghosts)}"
+                )
+                
+                for ghost in unique_ghosts:
                     await self.activate_ghost(ghost, message)
             else:
                 logger.warning(
@@ -313,6 +346,8 @@ class GhostBot(commands.Bot):
         message += (
             f"• `@{self.user.display_name} help` - Summon first available ghost\n"
         )
+        message += "• Reply to any ghost's message - Automatically summon that ghost\n"
+        message += "• Reply + mention other ghosts - Multiple ghosts respond\n"
         message += "• `!reload` - Reload ghost configurations"
 
         await ctx.send(message)
@@ -408,6 +443,8 @@ class GhostBot(commands.Bot):
         message += "**Ghost Interaction:**\n"
         message += "• `@ghost_name message` - Summon a specific ghost\n"
         message += "• `@bot_name message` - Summon first available ghost\n"
+        message += "• Reply to any ghost's message - Automatically summon that ghost\n"
+        message += "• Reply + mention other ghosts - Multiple ghosts respond\n"
         message += (
             "• `!speak ghost1 ghost2 ...` - Make specific ghosts speak in sequence\n\n"
         )
@@ -473,3 +510,27 @@ class GhostBot(commands.Bot):
         # Let other errors propagate
         logger.error(f"Command error: {type(error).__name__}: {error}")
         raise error
+
+    def identify_ghost_from_message(self, message) -> Optional[str]:
+        """
+        Identify which ghost sent a message by checking webhook properties
+        
+        Args:
+            message: Discord message object
+            
+        Returns:
+            Ghost handle if the message was sent by a ghost, None otherwise
+        """
+        # Check if this is a webhook message from a ghost
+        if (hasattr(message, "webhook_id") 
+            and message.webhook_id 
+            and hasattr(message.author, "name") 
+            and hasattr(message.author, "discriminator")
+            and message.author.discriminator == "0000"):  # Webhook messages have discriminator 0000
+            
+            # Find the ghost by name
+            for ghost_handle, ghost in self.ghost_group:
+                if ghost.name == message.author.name:
+                    return ghost_handle
+                    
+        return None

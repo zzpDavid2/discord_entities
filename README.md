@@ -113,6 +113,8 @@ COHERE_API_KEY=your_cohere_key_here
 
 - `@mybot hello` - Summon a specific ghost
 - `@GhostBot help` - Summon first available ghost
+- Reply to any ghost's message - Automatically summon that ghost
+- Reply + mention other ghosts - Multiple ghosts respond
 - `!ghosts` - List all loaded ghosts
 - `!test-ghost mybot` - Test a specific ghost
 - `!reload-ghosts` - Reload ghost configurations
