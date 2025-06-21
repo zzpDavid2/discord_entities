@@ -122,6 +122,25 @@ class Ghost(BaseModel):
             logger.warning(f"🔄 {self.name} using fallback response")
             return fallback_msg
 
+    def _normalize_name(self, name: str) -> str:
+        """
+        Normalize a name by filtering out non-letter characters, emojis, and non-printable characters.
+        Keeps letters (including non-Latin), numbers, and spaces.
+        
+        Args:
+            name: The name to normalize
+            
+        Returns:
+            Normalized name with only letter-like characters
+        """
+        import re
+        # Keep letters (including non-Latin), numbers, and spaces
+        # Remove emojis, symbols, and other non-printable characters
+        normalized = re.sub(r'[^\w\s]', '', name, flags=re.UNICODE)
+        # Remove extra whitespace
+        normalized = ' '.join(normalized.split())
+        return normalized
+
     def format_discord_messages_for_llm(
         self, discord_messages: List[Any], message_limit: int = 50
     ) -> List[Dict[str, str]]:
@@ -153,7 +172,7 @@ class Ghost(BaseModel):
                 hasattr(msg, "webhook_id")
                 and msg.webhook_id
                 and hasattr(msg.author, "name")
-                and msg.author.name == self.name
+                and self._normalize_name(msg.author.name) == self._normalize_name(self.name)
             )
 
             # Check if this message is from another ghost (webhook with different name)
@@ -161,7 +180,7 @@ class Ghost(BaseModel):
                 hasattr(msg, "webhook_id")
                 and msg.webhook_id
                 and hasattr(msg.author, "name")
-                and msg.author.name != self.name
+                and self._normalize_name(msg.author.name) != self._normalize_name(self.name)
                 and hasattr(msg.author, "discriminator")
                 and msg.author.discriminator
                 == "0000"  # Webhook messages have discriminator 0000

@@ -290,6 +290,7 @@ class GhostBot(commands.Bot):
                 
                 # Check if the referenced message was sent by a ghost
                 ghost_handle = self.identify_ghost_from_message(referenced_message)
+                # logger.info(f"👻 Referenced message: {referenced_message.content} from {referenced_message.author.display_name!r}, ghost handle: {ghost_handle!r}")
                 if ghost_handle:
                     ghost = self.ghost_group.get(ghost_handle)
                     if ghost:
@@ -522,6 +523,25 @@ class GhostBot(commands.Bot):
         logger.error(f"Command error: {type(error).__name__}: {error}")
         raise error
 
+    def _normalize_name(self, name: str) -> str:
+        """
+        Normalize a name by filtering out non-letter characters, emojis, and non-printable characters.
+        Keeps letters (including non-Latin), numbers, and spaces.
+        
+        Args:
+            name: The name to normalize
+            
+        Returns:
+            Normalized name with only letter-like characters
+        """
+        import re
+        # Keep letters (including non-Latin), numbers, and spaces
+        # Remove emojis, symbols, and other non-printable characters
+        normalized = re.sub(r'[^\w\s]', '', name, flags=re.UNICODE)
+        # Remove extra whitespace
+        normalized = ' '.join(normalized.split())
+        return normalized.strip()
+
     def identify_ghost_from_message(self, message) -> Optional[str]:
         """
         Identify which ghost sent a message by checking webhook properties
@@ -532,6 +552,7 @@ class GhostBot(commands.Bot):
         Returns:
             Ghost handle if the message was sent by a ghost, None otherwise
         """
+        # logger.info(f"Identifying ghost from message: {message.author!r}, {message.author.name!r}, {message.author.discriminator!r}, {message.author.avatar!r} {message.webhook_id!r}")
         # Check if this is a webhook message from a ghost
         if (hasattr(message, "webhook_id") 
             and message.webhook_id 
@@ -539,9 +560,15 @@ class GhostBot(commands.Bot):
             and hasattr(message.author, "discriminator")
             and message.author.discriminator == "0000"):  # Webhook messages have discriminator 0000
             
+            # Normalize the message author name
+            author_name_normalized = self._normalize_name(message.author.name)
+            
             # Find the ghost by name
             for ghost_handle, ghost in self.ghost_group:
-                if ghost.name == message.author.name:
+                # Normalize the ghost name for comparison
+                ghost_name_normalized = self._normalize_name(ghost.name)
+                # print(f"Ghost: {ghost.name!r} -> {ghost_name_normalized!r}, {ghost.handle!r}, {ghost.discord_avatar!r} matching {message.author.name!r} -> {author_name_normalized!r}")
+                if ghost_name_normalized == author_name_normalized:
                     return ghost_handle
                     
         return None
