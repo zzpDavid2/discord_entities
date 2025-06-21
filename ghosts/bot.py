@@ -486,8 +486,8 @@ class GhostBot(commands.Bot):
                 message += f"\n**Entities with Custom LLM Config:**\n"
                 for ghost in custom_config_ghosts:
                     config_info = []
-                    if ghost.api_url:
-                        config_info.append(f"URL: {ghost.api_url}")
+                    if ghost.base_url:
+                        config_info.append(f"URL: {ghost.base_url}")
                     if ghost.api_key:
                         config_info.append("Custom API Key")
                     message += f"  • {ghost.name}: {', '.join(config_info)}\n"
@@ -644,6 +644,7 @@ class GhostBot(commands.Bot):
                 await ctx.send("🛑 **Entity activity was stopped during !chat command.**")
                 return
             
+            logger.info(f"Chat turn {turn} of {num_turns}: queue={[s.name for s in speaker_queue]}")
             # Select speaker from the first half of the queue
             queue_size = len(speaker_queue)
             if queue_size > 1:
@@ -656,7 +657,8 @@ class GhostBot(commands.Bot):
             current_ghost = speaker_queue[selected_index]
             
             # Move the selected speaker to the back of the queue
-            speaker_queue.append(speaker_queue.pop(selected_index))
+            speaker_queue.pop(selected_index)
+            speaker_queue.append(current_ghost)
             
             try:
                 # Activate the entity using the existing infrastructure
