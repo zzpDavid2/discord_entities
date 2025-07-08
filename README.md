@@ -1,196 +1,167 @@
-# 👻 Ghosts Discord Bot
+# 👻 Entities Discord Bot
 
-A simple Discord bot that replies with a fixed message when tagged.
+An experimental multi-entity AI system for Discord, designed for EXP camp activities. Create multiple AI personalities that can interact with users and each other in real-time conversations.
 
-## Features
+## 🎯 Purpose
 
-- Responds with a spooky message when mentioned in any Discord channel
-- Easy to set up and run
-- Built with discord.py
+This system enables rich AI-to-AI interactions in Discord channels, where multiple entities with distinct personalities can:
+- Respond to user messages and mentions
+- Tag and reply to each other autonomously  
+- Engage in multi-turn conversations when commanded to do so
+- Use different LLM providers per entity, including private and fine-tuned models
 
-## Setup
+The original intention was a simple way to explore AI personas and how LLMs understand instructions and characters on various levels, but also to have fun and light-hearted experiments with emergent AI behaviors, collaborative problem-solving, and creative AI interactions.
 
-### 1. Install Dependencies
+## 🚀 Quick Start
 
-Make sure you have Python 3.12+ installed, then run:
+### 1. Check out the code and install dependencies
+
+```bash
+git clone https://github.com/gavento/discord_entities.git
+cd discord_entities
+```
+
+Install the dependencies:
 
 ```bash
 pip install -e .
 ```
 
+or alternatively with `uv`:
+
+```bash
+uv sync
+```
+
 ### 2. Create a Discord Bot
 
-1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
-2. Create a new application
-3. Go to the "Bot" section
-4. Create a bot and copy the token
-5. Enable the following bot permissions:
-   - Send Messages
-   - Read Message History
-   - Mention Everyone
+You need to create your own discord bot instance in the discord app that this code will use.
 
-### 3. Set up Environment Variables
+1. To create a Discord bot, you need to create a new application in the [Discord Developer Portal](https://discord.com/developers/applications).
+2. Then, go to the "Bot" section and click "Add Bot".
+3. Copy the token and paste it into the `.env` file below.
+4. Note the bot needs the "Message Content Intent" enabled.
+5. Then you need to create the bot invite link under OAuth2 > URL Generator:
+    - Select the "bot" scope and the "Manage Webhooks", "Send Messages", "Read Message History", "Manage Messages", "View Channel" permissions, though you can add more if you want.
+    - Copy the generated URL and open it in your browser.
+    - Select your server and authorize the bot.
 
-Create a `.env` file in the project root:
+### 3. Configuration
 
 ```bash
 cp env.example .env
 ```
 
-Edit the `.env` file and add your bot token:
-
-```
-DISCORD_BOT_TOKEN=your_actual_bot_token_here
-```
-
-### 4. Invite the Bot to Your Server
-
-1. In the Discord Developer Portal, go to OAuth2 > URL Generator
-2. Select "bot" scope
-3. Select the required permissions (Send Messages, Read Message History, Mention Everyone)
-4. Copy the generated URL and open it in your browser
-5. Select your server and authorize the bot
-
-## Running the Bot
-
-You can run the bot in two ways:
-
-### Option 1: Using the runner script
-```bash
-python run_bot.py
-```
-
-### Option 2: Directly running the bot module
-```bash
-python -m ghosts.bot
-```
-
-## Usage
-
-Once the bot is running and invited to your server:
-
-1. Tag the bot in any channel: `@YourBotName hello!`
-2. The bot will reply with: "👻 Boo! You summoned the ghost bot! I'm here to haunt your Discord server. 👻"
-
-## Customization
-
-You can customize the bot's response by editing the `fixed_message` variable in `ghosts/bot.py`:
-
-```python
-fixed_message = "Your custom message here!"
-```
-
-## LLM-Powered Ghost System
-
-### New: AI-Powered Ghost Personalities
-
-The project now includes an advanced LLM-powered system where each ghost has its own personality, powered by AI models!
-
-#### Running the LLM Ghost System
+Edit `.env` with your Discord bot token (from above) and LLM API keys:
 
 ```bash
-python run_ghosts.py
+# Required
+DISCORD_BOT_TOKEN=your_discord_bot_token
+
+# LLM Providers (choose one or more)
+OPENAI_API_KEY=your_openai_key
+ANTHROPIC_API_KEY=your_anthropic_key
+COHERE_API_KEY=your_cohere_key
+GOOGLE_API_KEY=your_google_key
+OPENROUTER_API_KEY=your_openrouter_key
 ```
 
-#### Ghost Configuration
+### 4. Create Entity Configurations
 
-Create ghost personality files in the `ghost_definitions/` directory:
+Place your YAML/JSON files in `entity_definitions/`. Remove the example files if you want.
 
-**Basic Ghost Configuration (YAML):**
 ```yaml
 name: "🦍 Tomas*"
 handle: "tomas"
 discord_avatar: "https://avatar.iran.liara.run/username?username=T+G"
-description: "A first version of Tomas's ghost. Spooky!"
-instructions: |
-  You are Tomas's ghost, called 🦍 Tomas*, a delightfully eccentric digital ghost who's equal parts brilliant and slightly unhinged.
+description: "An eccentric problem-solver entity" # This is used for the bot's help command only
+instructions: | # This is used as a part of the entity's system prompt
+  You are Tomas's entity, a delightfully eccentric digital entity who's equal parts 
+  brilliant and slightly unhinged. You solve problems with creative, chaotic solutions.
 model: "anthropic/claude-sonnet-4-0"
 temperature: 0.7
 ```
 
-**Ghost with Custom LLM Configuration:**
-```yaml
-name: "🔮 Custom LLM Ghost"
-handle: "custom"
-description: "A ghost with custom LLM configuration"
-instructions: "You are a ghost with custom LLM configuration."
-model: "gpt-4o-mini"
-temperature: 0.8
-# Optional: Override global API configuration
-api_url: "https://api.openai.com/v1"
-api_key: "your-custom-api-key-here"
-```
-
-**JSON Format Example:**
-```json
-{
-    "name": "🐦‍ Anna*",
-    "handle": "anna",
-    "description": "Anna's ghost with custom configuration",
-    "instructions": "You are Anna's ghost, a brilliantly eccentric digital companion.",
-    "model": "gpt-4.1-mini",
-    "api_url": "https://api.openai.com/v1",
-    "api_key": "your-custom-api-key"
-}
-```
-
-#### LLM Setup
-
-**Global Configuration (via .env):**
-Add API keys to your `.env` file for default configuration:
-
+### 4. Run the Bot
 ```bash
-# Choose your preferred LLM provider
-OPENAI_API_KEY=your_openai_key_here
-# OR
-ANTHROPIC_API_KEY=your_anthropic_key_here  
-# OR
-COHERE_API_KEY=your_cohere_key_here
+python run_entities.py
 ```
 
-**Per-Ghost Configuration:**
-Each ghost can override the global configuration with its own settings:
+#### Hosting
 
-- `api_url`: Custom API endpoint (e.g., `https://api.openai.com/v1`)
-- `api_key`: Custom API key for this specific ghost
-- `model`: LLM model to use (e.g., `gpt-4o-mini`, `anthropic/claude-3-5-sonnet`)
+You can deploy it anywhere, but e.g. https://pebblehost.com/bot-hosting is a very approachable and affordable option - in particular you can easily edit individual files there via the web interface. This is especially convenient for `.env` and `entity_definitions/` files (do not commit your `.env` file to the repo, and the files in `entity_definitions/` might be private for some activities).
+
+## 🎮 Usage in Discord
+
+### Basic Interactions
+- `@entityname hello` - Summon specific entity
+- `@BotName help` - Summon first available entity
+- Reply to entity messages - Auto-summon that entity
+- `@entity1 @entity2 question` - Multi-entity responses
+
+### Bot Commands
+- `!list` - Show loaded entities
+- `!status` - System status + custom configs
+- `!reload` - Reload entity configurations
+- `!speak entity1 entity2` - Sequential responses
+- `!chat [entities] [turns]` - Start entity conversation (default: 10 turns)
+- `!stop` - Pause all entity activity (30s)
+- `!commands` - Show help
+
+### Entity-to-Entity Features
+- Entities automatically respond when tagged by other entities
+- Context-aware conversations between entities
+- Entities can reference each other's messages
+- Collaborative problem-solving and debates
+
+## 🎭 Entity Configuration
+
+### Basic Fields
+- `name`: Display name (with emojis)
+- `handle`: Unique identifier for mentions (@handle)
+- `discord_avatar`: Avatar URL (optional)
+- `description`: Brief description
+- `instructions`: Personality/behavior prompt
+- `model`: LLM model (default: `gpt-4.1-mini`)
 - `temperature`: Response randomness (0.0-2.0)
 
-**Example Use Cases:**
-- Different ghosts using different LLM providers
-- Self-hosted LLM instances for specific ghosts
-- Different API keys for different ghosts
-- Overriding global configuration on a per-ghost basis
+### Custom LLM Configuration
+Override global .env settings per entity:
+```yaml
+base_url: "https://api.openai.com/v1"  # Custom API endpoint
+api_key: "your-custom-key"             # Custom API key
+```
 
-#### Usage
+Supports: OpenAI, Anthropic, Cohere, Google, OpenRouter, self-hosted instances.
 
-- `@ghostname hello` - Summon a specific ghost
-- `@GhostBot help` - Summon first available ghost
-- Reply to any ghost's message - Automatically summon that ghost
-- Reply + mention other ghosts - Multiple ghosts respond
-- `@ghost1 @ghost2 message` - Tag multiple ghosts at once
-- `!list` - List all loaded ghosts with their configurations
-- `!status` - Show detailed system status including custom configurations
-- `!test-ghost ghostname` - Test a specific ghost
-- `!reload` - Reload ghost configurations
-- `!ghost-chat` - Start a conversation between all ghosts
+## 🛠️ Advanced Usage
 
-#### Features
+### Command Line Options
+```bash
+python run_entities.py --debug                    # Debug logging
+python run_entities.py --entities-path ./custom   # Custom entity directory  
+python run_entities.py --message-limit 100       # More context (default: 50)
+python run_entities.py --log-file bot.log        # Log to file
+```
 
-- **Context Awareness**: Ghosts read recent messages for context
-- **Unique Personalities**: Each ghost has its own AI-powered personality
-- **Multiple LLM Support**: Works with OpenAI, Anthropic, Cohere, and more
-- **Per-Ghost Configuration**: Each ghost can have its own API URL, key, and model
-- **Hot Reloading**: Update ghost configs without restarting
-- **Webhook Integration**: Ghosts appear as separate users
-- **Ghost-to-Ghost Interactions**: Ghosts can tag and respond to each other
-- **Enhanced Conversations**: Ghosts can debate, collaborate, and build on each other's ideas
+## 📁 Project Structure
 
-## Troubleshooting
+```
+entities/
+├── discord_entities/          # Core bot module
+├── entity_definitions/        # Entity configurations (default)
+├── run_entities.py            # Main runner
+├── CUSTOM_LLM_CONFIG.md       # Per-entity LLM guide
+└── ENTITY_INTERACTIONS.md     # Entity interaction guide
+```
 
-- Make sure your bot token is correct in the `.env` file
-- Ensure the bot has the necessary permissions in your Discord server
-- Check that the bot is online in your server's member list
-- For LLM features, ensure you have valid API keys (global or per-ghost)
-- Use `!status` to check system status and ghost configurations
-- Check `ghost_definitions_examples/` for configuration examples
+## 🔧 For Developers
+
+- **Framework**: discord.py + litellm + pydantic
+- **Python**: 3.12+ required
+- **Entity Module**: `discord_entities.entity.Entity`
+- **Bot Class**: `discord_entities.bot.EntityBot`
+- **Hot Reloading**: Configurations reload without restart
+- **Webhooks**: Entities appear as separate Discord users
+- **Error Handling**: Graceful fallbacks for LLM failures
+
