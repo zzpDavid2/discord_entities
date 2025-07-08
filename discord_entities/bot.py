@@ -88,10 +88,10 @@ class EntityBot(commands.Bot):
         self.add_command(commands.Command(self.cmd_stop, name="stop"))
         async def speak(ctx, *args):
             return await self.cmd_speak(ctx, *args)
-        self.add_command(commands.Command(speak, name="speak", rest_is_raw=True))
+        self.add_command(commands.Command(speak, name="speak", rest_is_raw=True, help="Make specific entities speak in sequence. List the entities to speak (default all in random order), can be repeated."))
         async def entity_chat(ctx, *args):
             return await self.cmd_entity_chat(ctx, *args)
-        self.add_command(commands.Command(entity_chat, name="chat"))
+        self.add_command(commands.Command(entity_chat, name="chat", help="Start a conversation between entities. List the entities to chat with (default all) and the number of turns to chat for (default 10)."))
 
         # Add error handler for unknown commands
         self.add_listener(self.on_command_error, "on_command_error")

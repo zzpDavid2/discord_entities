@@ -1,10 +1,12 @@
 # 🎭 Entities Discord Bot
 
-An experimental multi-entity AI system for Discord, designed for EXP camp activities. Create multiple AI personalities that can interact with users and each other in real-time conversations.
+An experimental multi-entity AI system for Discord, designed for the [EXP camp](https://exp.camp/) activities. Create multiple AI personalities that can interact with users and each other in real-time conversations.
+
+Accompanied by a class on Narrative dynamics in language models by Gavin: https://www.gleech.org/narratives
 
 ## 🎯 Purpose
 
-This system enables rich AI-to-AI interactions in Discord channels, where multiple entities with distinct personalities can:
+This system enables rich AI-to-AI-to-Human interactions in Discord channels, where multiple entities with distinct personalities can:
 - Respond to user messages and mentions
 - Tag and reply to each other autonomously  
 - Engage in multi-turn conversations when commanded to do so
@@ -86,6 +88,11 @@ temperature: 0.7
 ```bash
 python run_entities.py
 ```
+or alternatively with `uv`:
+
+```bash
+uv run run_entities.py
+```
 
 #### Hosting
 
@@ -95,17 +102,15 @@ You can deploy it anywhere, but e.g. https://pebblehost.com/bot-hosting is a ver
 
 ### Basic Interactions
 - `@entityname hello` - Summon specific entity
-- `@BotName help` - Summon first available entity
-- Reply to entity messages - Auto-summon that entity
 - `@entity1 @entity2 question` - Multi-entity responses
 
 ### Bot Commands
 - `!list` - Show loaded entities
 - `!status` - System status + custom configs
-- `!reload` - Reload entity configurations
-- `!speak entity1 entity2` - Sequential responses
+- `!reload` - Reload entity configurations from the `entity_definitions/` directory
+- `!speak entity1 entity2` - Sequential responses between entities
 - `!chat [entities] [turns]` - Start entity conversation (default: 10 turns)
-- `!stop` - Pause all entity activity (30s)
+- `!stop` - Pause all entity activity (for 30s)
 - `!commands` - Show help
 
 ### Entity-to-Entity Features
