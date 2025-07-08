@@ -101,8 +101,8 @@ You can deploy it anywhere, but e.g. https://pebblehost.com/bot-hosting is a ver
 ## 🎮 Usage in Discord
 
 ### Basic Interactions
-- `@entityname hello` - Summon specific entity
-- `@entity1 @entity2 question` - Multi-entity responses
+- `@entityname [message]` - Summon specific entity
+- `@entity1 @entity2 [question]` - Multi-entity responses
 
 ### Bot Commands
 - `!list` - Show loaded entities
