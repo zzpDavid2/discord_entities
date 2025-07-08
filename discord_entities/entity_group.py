@@ -15,56 +15,56 @@ class EntityGroup:
         Initialize an entity group
 
         Args:
-            ghosts: Dictionary mapping handles to Ghost instances
+            entitys: Dictionary mapping handles to Entity instances
         """
-        self.ghosts = entities or {}
+        self.entitys = entities or {}
 
     def __len__(self) -> int:
         """Return the number of entities in the group"""
-        return len(self.ghosts)
+        return len(self.entitys)
 
     def __iter__(self):
         """Iterate over entity handles and instances"""
-        return iter(self.ghosts.items())
+        return iter(self.entitys.items())
 
     def __getitem__(self, handle: str) -> Entity:
         """Get an entity by handle"""
-        return self.ghosts[handle]
+        return self.entitys[handle]
 
     def get(self, handle: str, default: Entity = None) -> Optional[Entity]:
         """Get an entity by handle with default fallback"""
-        return self.ghosts.get(handle, default)
+        return self.entitys.get(handle, default)
 
     def keys(self):
         """Return entity handles"""
-        return self.ghosts.keys()
+        return self.entitys.keys()
 
     def values(self):
         """Return entity instances"""
-        return self.ghosts.values()
+        return self.entitys.values()
 
     def items(self):
         """Return handle, entity pairs"""
-        return self.ghosts.items()
+        return self.entitys.items()
 
-    def add_ghost(self, ghost: Entity):
+    def add_entity(self, entity: Entity):
         """Add an entity to the group"""
-        self.ghosts[ghost.handle] = ghost
-        logger.info(f"✅ Added entity: {ghost.name} (handle: {ghost.handle}) to group")
+        self.entitys[entity.handle] = entity
+        logger.info(f"✅ Added entity: {entity.name} (handle: {entity.handle}) to group")
 
-    def remove_ghost(self, handle: str) -> Optional[Entity]:
+    def remove_entity(self, handle: str) -> Optional[Entity]:
         """Remove an entity by handle"""
-        ghost = self.ghosts.pop(handle, None)
-        if ghost:
-            logger.info(f"🗑️ Removed entity: {ghost.name} (handle: {handle}) from group")
-        return ghost
+        entity = self.entitys.pop(handle, None)
+        if entity:
+            logger.info(f"🗑️ Removed entity: {entity.name} (handle: {handle}) from group")
+        return entity
 
-    def find_ghost_by_mention(self, message_content: str) -> List[Entity]:
+    def find_entity_by_mention(self, message_content: str) -> List[Entity]:
         """Find all entities being mentioned in the message"""
         import re
 
         message_lower = message_content.lower()
-        mentioned_ghosts = []
+        mentioned_entitys = []
 
         # Check for pseudo-mentions like "@tomas", "@anna"
         pseudo_mention_pattern = r"@(\w+)"
@@ -72,17 +72,17 @@ class EntityGroup:
         pseudo_mentions = [mention.lower() for mention in pseudo_mentions]
 
         # Check if any handle appears in the message or pseudo-mentions
-        for handle, ghost in self.ghosts.items():
+        for handle, entity in self.entitys.items():
             if (
                 f"@{handle.lower()}" in message_lower
                 or handle.lower() in pseudo_mentions
-                and ghost not in mentioned_ghosts
+                and entity not in mentioned_entitys
             ):
-                mentioned_ghosts.append(ghost)
+                mentioned_entitys.append(entity)
 
-        return mentioned_ghosts
+        return mentioned_entitys
 
-    def _normalize_ghost_name(self, name: str) -> str:
+    def _normalize_entity_name(self, name: str) -> str:
         """
         Normalize an entity name by removing emojis and special characters
 
@@ -100,7 +100,7 @@ class EntityGroup:
         normalized = " ".join(normalized.split())
         return normalized.strip()
 
-    def get_ghost_by_name(self, name: str) -> Optional[Entity]:
+    def get_entity_by_name(self, name: str) -> Optional[Entity]:
         """
         Find an entity by their display name (case-insensitive)
 
@@ -108,13 +108,13 @@ class EntityGroup:
             name: The entity's display name
 
         Returns:
-            Ghost instance if found, None otherwise
+            Entity instance if found, None otherwise
         """
-        normalized_name = self._normalize_ghost_name(name).lower()
+        normalized_name = self._normalize_entity_name(name).lower()
 
-        for ghost in self.ghosts.values():
-            if self._normalize_ghost_name(ghost.name).lower() == normalized_name:
-                return ghost
+        for entity in self.entitys.values():
+            if self._normalize_entity_name(entity.name).lower() == normalized_name:
+                return entity
 
         return None
 
@@ -130,14 +130,14 @@ class EntityGroup:
             ignore_errors: If False, raises ValueError when an entity fails to load
 
         Returns:
-            GhostGroup instance with loaded entities
+            EntityGroup instance with loaded entities
 
         Raises:
             ValueError: If ignore_errors is False and any entity fails to load
         """
         logger.info(f"📁 Loading entities from directory: {directory}")
 
-        ghost_group = cls()
+        entity_group = cls()
         directory_path = Path(directory)
 
         if not directory_path.exists():
@@ -145,7 +145,7 @@ class EntityGroup:
             logger.warning(f"⚠️  {error_msg}")
             if not ignore_errors:
                 raise ValueError(error_msg)
-            return ghost_group
+            return entity_group
 
         # Supported file extensions
         supported_extensions = [".json", ".yaml", ".yml"]
@@ -160,13 +160,13 @@ class EntityGroup:
             logger.warning(f"⚠️  {error_msg}")
             if not ignore_errors:
                 raise ValueError(error_msg)
-            return ghost_group
+            return entity_group
 
         # Load each entity
         for file_path in config_files:
             try:
-                ghost = Entity.load_from_file(file_path)
-                ghost_group.add_ghost(ghost)
+                entity = Entity.load_from_file(file_path)
+                entity_group.add_entity(entity)
             except ValueError as e:
                 if not ignore_errors:
                     raise ValueError(
@@ -177,10 +177,10 @@ class EntityGroup:
                     exc_info=True,
                 )
 
-        if len(ghost_group) == 0 and not ignore_errors:
+        if len(entity_group) == 0 and not ignore_errors:
             raise ValueError(f"No entities were successfully loaded from {directory}")
 
-        return ghost_group
+        return entity_group
 
     def __str__(self) -> str:
-        return f"EntityGroup({len(self.ghosts)} entities: {list(self.ghosts.keys())})"
+        return f"EntityGroup({len(self.entitys)} entities: {list(self.entitys.keys())})"

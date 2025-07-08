@@ -4,3 +4,5 @@ __pycache__/
 _attic/
 node_modules/
 .uv/
+.ruff_cache/
+.mypy_cache/

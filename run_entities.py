@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 from discord_entities.bot import EntityBot
 
-DEFAULT_ENTITY_DIRECTORY = "entity_defs"
+DEFAULT_ENTITY_DIRECTORY = "entity_definitions"
 
 
 def setup_logging(level: str, log_file: str | None = None):

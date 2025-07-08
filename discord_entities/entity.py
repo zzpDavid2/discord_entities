@@ -176,7 +176,7 @@ class Entity(BaseModel):
         return normalized
 
     def format_discord_messages_for_llm(
-        self, discord_messages: List[Any], message_limit: int = 50, ghost_group=None
+        self, discord_messages: List[Any], message_limit: int = 50, entity_group=None
     ) -> List[Dict[str, str]]:
         """
         Convert Discord message objects to LLM format
@@ -184,7 +184,7 @@ class Entity(BaseModel):
         Args:
             discord_messages: List of Discord message objects
             message_limit: Maximum number of messages to include
-            ghost_group: Optional GhostGroup to look up ghost handles
+            entity_group: Optional EntityGroup to look up entity handles
 
         Returns:
             List of formatted messages for LLM
@@ -204,7 +204,7 @@ class Entity(BaseModel):
                 continue
 
             # Check if this message is from the current entity (via webhook)
-            is_current_ghost = (
+            is_current_entity = (
                 hasattr(msg, "webhook_id")
                 and msg.webhook_id
                 and hasattr(msg.author, "name")
@@ -213,7 +213,7 @@ class Entity(BaseModel):
             )
 
             # Check if this message is from another entity (webhook with different name)
-            is_other_ghost = (
+            is_other_entity = (
                 hasattr(msg, "webhook_id")
                 and msg.webhook_id
                 and hasattr(msg.author, "name")
@@ -227,31 +227,31 @@ class Entity(BaseModel):
             # Check if this is a regular bot message (not webhook) - these are typically command responses
             is_regular_bot = msg.author.bot and not getattr(msg, "webhook_id", None)
 
-            if is_current_ghost:
+            if is_current_entity:
                 # This entity's own previous messages -> assistant role, no prefix
                 formatted_msg = {"role": "assistant", "content": msg.content}
                 formatted_messages.append(formatted_msg)
                 logger.debug(f"💬 {self.name} found own message: {msg.content[:50]}...")
 
-            elif is_other_ghost:
+            elif is_other_entity:
                 # Another entity's message -> user role with entity name
-                ghost_name = msg.author.name
+                entity_name = msg.author.name
 
-                # Try to find the ghost and get its handle
-                ghost_handle = None
-                if ghost_group:
-                    # Look up the ghost by name
-                    for handle, ghost in ghost_group:
-                        if self._normalize_name(ghost.name) == self._normalize_name(
-                            ghost_name
+                # Try to find the entity and get its handle
+                entity_handle = None
+                if entity_group:
+                    # Look up the entity by name
+                    for handle, entity in entity_group:
+                        if self._normalize_name(entity.name) == self._normalize_name(
+                            entity_name
                         ):
-                            ghost_handle = handle
+                            entity_handle = handle
                             break
 
                 content = (
-                    f"{ghost_name}:\n{msg.content}"
-                    if not ghost_handle
-                    else f"{ghost_name} (Discord handle: {ghost_handle}):\n{msg.content}"
+                    f"{entity_name}:\n{msg.content}"
+                    if not entity_handle
+                    else f"{entity_name} (Discord handle: {entity_handle}):\n{msg.content}"
                 )
                 formatted_msg = {
                     "role": "user",
@@ -259,13 +259,13 @@ class Entity(BaseModel):
                 }
                 formatted_messages.append(formatted_msg)
 
-                if ghost_handle:
+                if entity_handle:
                     logger.debug(
-                        f"{self.name} found other entity message from {ghost_name} (@{ghost_handle})"
+                        f"{self.name} found other entity message from {entity_name} (@{entity_handle})"
                     )
                 else:
                     logger.debug(
-                        f"{self.name} found other entity message from {ghost_name}"
+                        f"{self.name} found other entity message from {entity_name}"
                     )
 
             elif is_regular_bot:
@@ -304,7 +304,7 @@ class Entity(BaseModel):
             file_path: Path to the entity configuration file
 
         Returns:
-            Ghost instance
+            Entity instance
 
         Raises:
             ValueError: If the file cannot be loaded or parsed
@@ -322,10 +322,10 @@ class Entity(BaseModel):
                 else:
                     raise ValueError(f"Unsupported file type: {file_path.suffix}")
 
-            # Validate and create Ghost instance
-            ghost = cls(**data)
-            logger.debug(f"✅ Created entity instance: {ghost.name}")
-            return ghost
+            # Validate and create Entity instance
+            entity = cls(**data)
+            logger.debug(f"✅ Created entity instance: {entity.name}")
+            return entity
 
         except Exception as e:
             error_msg = (
