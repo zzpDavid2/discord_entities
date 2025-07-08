@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 import discord
 from discord.ext import commands
 
-from .ghost_group import GhostGroup
+from .entity_group import EntityGroup
 from .utils import shorten_str
 
 # Set up logging for this module
@@ -18,7 +18,7 @@ class Channel:
     """Simple channel state tracking"""
     def __init__(self):
         self.last_stop_time = 0  # Unix timestamp when !stop was last called
-        self.chat_participants = []  # List of ghost handles currently in an active chat
+        self.chat_participants = []  # List of entity handles currently in an active chat
 
     def is_stopped(self) -> bool:
         """Check if channel is currently stopped (within 30 seconds of last stop)"""
@@ -29,47 +29,47 @@ class Channel:
         self.last_stop_time = time.time()
         self.chat_participants.clear()  # Clear chat participants when stopped
 
-    def add_chat_participant(self, ghost_handle: str):
-        """Add a ghost handle to the chat participants list"""
-        if ghost_handle not in self.chat_participants:
-            self.chat_participants.append(ghost_handle)
+    def add_chat_participant(self, handle: str):
+        """Add a entity handle to the chat participants list"""
+        if handle not in self.chat_participants:
+            self.chat_participants.append(handle)
 
-    def remove_chat_participant(self, ghost_handle: str):
-        """Remove a ghost handle from the chat participants list"""
-        if ghost_handle in self.chat_participants:
-            self.chat_participants.remove(ghost_handle)
+    def remove_chat_participant(self, handle: str):
+        """Remove a entity handle from the chat participants list"""
+        if handle in self.chat_participants:
+            self.chat_participants.remove(handle)
 
     def clear_chat_participants(self):
         """Clear all chat participants"""
         self.chat_participants.clear()
 
-    def is_in_chat(self, ghost_handle: str) -> bool:
-        """Check if a ghost handle is currently participating in a chat"""
-        return ghost_handle in self.chat_participants
+    def is_in_chat(self, handle: str) -> bool:
+        """Check if a entity handle is currently participating in a chat"""
+        return handle in self.chat_participants
 
 
-class GhostBot(commands.Bot):
+class EntityBot(commands.Bot):
     """Discord bot for managing and interacting with entities"""
 
-    def __init__(self, message_limit: int = 50, ghost_path: str = None):
+    def __init__(self, message_limit: int = 50, entity_path: str = None):
         """
         Initialize the entity bot
 
         Args:
             message_limit: Number of messages to include in context
-            ghost_path: Path to directory containing entity configs. If None, uses the default path.
+            entity_path: Path to directory containing entity configs. If None, uses the default path.
         """
         intents = discord.Intents.default()
         intents.message_content = True
 
         super().__init__(command_prefix="!", intents=intents)
 
-        self.ghost_group = GhostGroup()
+        self.entity_group = EntityGroup()
         self.channel_webhooks: Dict[int, discord.Webhook] = {}
         self.channels: Dict[int, Channel] = {}  # channel_id -> Channel
         self.message_limit = message_limit
-        self.ghost_path = ghost_path
-        assert self.ghost_path is not None, "ghost_path must be provided"
+        self.entity_path = entity_path
+        assert self.entity_path is not None, "entity_path must be provided"
 
         # Remove any existing listeners to prevent duplicates
         self.remove_listener(self.on_ready, "on_ready")
@@ -89,9 +89,9 @@ class GhostBot(commands.Bot):
         async def speak(ctx, *args):
             return await self.cmd_speak(ctx, *args)
         self.add_command(commands.Command(speak, name="speak", rest_is_raw=True))
-        async def ghost_chat(ctx, *args):
-            return await self.cmd_ghost_chat(ctx, *args)
-        self.add_command(commands.Command(ghost_chat, name="chat"))
+        async def entity_chat(ctx, *args):
+            return await self.cmd_entity_chat(ctx, *args)
+        self.add_command(commands.Command(entity_chat, name="chat"))
 
         # Add error handler for unknown commands
         self.add_listener(self.on_command_error, "on_command_error")
@@ -103,7 +103,7 @@ class GhostBot(commands.Bot):
         return self.channels[channel_id]
 
     def is_direct_user_mention(self, message) -> bool:
-        """Check if this is a direct mention of the bot by a user (not a ghost)"""
+        """Check if this is a direct mention of the bot by a user (not a entity)"""
         return (
             self.user.mentioned_in(message) and 
             not message.author.bot and
@@ -158,70 +158,68 @@ class GhostBot(commands.Bot):
         logger.info(f"🤖 {self.user} has connected to Discord!")
 
         # Load entities from configured directory
-        logger.info(f"📁 Looking for entity configs in: {self.ghost_path}")
+        logger.info(f"📁 Looking for entity configs in: {self.entity_path}")
         try:
-            self.ghost_group = GhostGroup.load_from_directory(self.ghost_path)
+            self.entity_group = EntityGroup.load_from_directory(self.entity_path)
         except ValueError as e:
             # Check if this is the specific "no bots available" error
-            if "No ghost config files found" in str(e) or "No ghosts were successfully loaded" in str(e):
-                logger.warning(f"⚠️  No entity config files found in {self.ghost_path}")
-                logger.warning("⚠️  Please add entity configuration files to the ghost_definitions directory")
-                # Initialize an empty ghost group so the bot can still function
-                self.ghost_group = GhostGroup()
+            if "No entity config files found" in str(e) or "No entities were successfully loaded" in str(e):
+                logger.warning(f"⚠️  No entity config files found in {self.entity_path}")
+                logger.warning("⚠️  Please add entity configuration files to the entity_definitions directory")
+                # Initialize an empty entity group so the bot can still function
+                self.entity_group = EntityGroup()
             else:
                 # Re-raise other ValueError exceptions
                 raise
 
-        if len(self.ghost_group) > 0:
-            logger.info(f"🎭 Entity system ready with {len(self.ghost_group)} entities:")
-            for ghost_key, ghost in self.ghost_group:
+        if len(self.entity_group) > 0:
+            logger.info(f"🎭 Entity system ready with {len(self.entity_group)} entities:")
+            for entity_key, entity in self.entity_group:
                 logger.info(
-                    f"  {ghost.name} (handle: {ghost.handle}) using {ghost.model}"
+                    f"  {entity.name} (handle: {entity.handle}) using {entity.model}"
                 )
         else:
             logger.warning("⚠️  No entities loaded! Check your bots directory.")
 
         logger.info("🚀 Bot is ready to receive entity summons!")
 
-    async def activate_ghost(
+    async def activate_entity(
         self,
-        ghost,
+        entity,
         message: Optional[discord.Message] = None,
-        prompt: Optional[str] = None,
     ):
         """
         Activate an entity to speak, optionally in response to a message
 
         Args:
-            ghost: The entity to activate
+            entity: The entity to activate
             message: Optional message to reply to
-            prompt: Optional custom prompt to use instead of message content
         """
         start_time = asyncio.get_event_loop().time()
         channel = message.channel if message else None
 
         try:
-            logger.info(f"🎬 {ghost.name} starting response generation")
+            logger.info(f"🎬 {entity.name} starting response generation")
 
             # Show typing indicator if we have a channel
             if channel:
                 async with channel.typing():
                     # Get recent messages for context
                     logger.debug(
-                        f"📚 {ghost.name} gathering message history from #{channel.name} (limit: {self.message_limit})"
+                        f"📚 {entity.name} gathering message history from #{channel.name} (limit: {self.message_limit})"
                     )
                     recent_messages = await self.get_recent_messages(channel)
 
                     # Format messages for LLM
-                    llm_messages = ghost.format_discord_messages_for_llm(
-                        recent_messages, message_limit=self.message_limit, ghost_group=self.ghost_group
+                    llm_messages = entity.format_discord_messages_for_llm(
+                        recent_messages, message_limit=self.message_limit, entity_group=self.entity_group
                     )
                     logger.debug(
-                        f"💬 {ghost.name} formatted {len(llm_messages)} messages for context"
+                        f"💬 {entity.name} formatted {len(llm_messages)} messages for context"
                     )
 
                     # Generate response using the entity's LLM
-                    response = await ghost.call_llm(llm_messages, max_tokens=400)
+                    response = await entity.call_llm(llm_messages, max_tokens=400)
 
                     # Try to send via webhook for better appearance
                     webhook = await self.get_or_create_webhook(channel)
@@ -229,66 +227,66 @@ class GhostBot(commands.Bot):
                     if webhook:
                         try:
                             logger.debug(
-                                f"📤 {ghost.name} sending response via webhook"
+                                f"📤 {entity.name} sending response via webhook"
                             )
 
                             # Prepare webhook kwargs
                             webhook_kwargs = {
                                 "content": shorten_str(response),
-                                "username": ghost.name,
+                                "username": entity.name,
                             }
 
                             # Add avatar if specified
-                            if ghost.discord_avatar:
-                                webhook_kwargs["avatar_url"] = str(ghost.discord_avatar)
+                            if entity.discord_avatar:
+                                webhook_kwargs["avatar_url"] = str(entity.discord_avatar)
 
                             await webhook.send(**webhook_kwargs)
 
                             elapsed = asyncio.get_event_loop().time() - start_time
                             logger.info(
-                                f"✅ {ghost.name} response sent via webhook in {elapsed:.2f}s"
+                                f"✅ {entity.name} response sent via webhook in {elapsed:.2f}s"
                             )
                             return
                         except Exception as e:
                             logger.error(
-                                f"❌ {ghost.name} webhook error: {type(e).__name__}: {e}"
+                                f"❌ {entity.name} webhook error: {type(e).__name__}: {e}"
                             )
                             logger.debug(
-                                f"🔍 Webhook error details for {ghost.name}",
+                                f"🔍 Webhook error details for {entity.name}",
                                 exc_info=True,
                             )
 
                     # Fallback to regular reply
-                    logger.debug(f"🔄 {ghost.name} falling back to regular reply")
+                    logger.debug(f"🔄 {entity.name} falling back to regular reply")
                     if message:
-                        await message.reply(f"**{ghost.name}**: {shorten_str(response)}")
+                        await message.reply(f"**{entity.name}**: {shorten_str(response)}")
                     else:
-                        await channel.send(f"**{ghost.name}**: {shorten_str(response)}")
+                        await channel.send(f"**{entity.name}**: {shorten_str(response)}")
 
                     elapsed = asyncio.get_event_loop().time() - start_time
                     logger.info(
-                        f"✅ {ghost.name} response sent via fallback in {elapsed:.2f}s"
+                        f"✅ {entity.name} response sent via fallback in {elapsed:.2f}s"
                     )
 
         except Exception as e:
             elapsed = asyncio.get_event_loop().time() - start_time
             logger.error(
-                f"❌ {ghost.name} response generation failed after {elapsed:.2f}s: {type(e).__name__}: {e}"
+                f"❌ {entity.name} response generation failed after {elapsed:.2f}s: {type(e).__name__}: {e}"
             )
             logger.debug(
-                f"🔍 Entity response error details for {ghost.name}", exc_info=True
+                f"🔍 Entity response error details for {entity.name}", exc_info=True
             )
 
-            error_msg = f"*{ghost.name} flickers and fades* Something went wrong in the spirit realm... ({str(e)[:100]})"
+            error_msg = f"*{entity.name} flickers and fades* Something went wrong in the spirit realm... ({str(e)[:100]})"
             try:
                 if message:
                     await message.reply(shorten_str(error_msg))
                 elif channel:
                     await channel.send(shorten_str(error_msg))
-                logger.warning(f"🔄 {ghost.name} sent error message to user")
+                logger.warning(f"🔄 {entity.name} sent error message to user")
             except Exception as reply_error:
                 logger.error(
-                    f"❌ {ghost.name} failed to send error message: {reply_error}"
+                    f"❌ {entity.name} failed to send error message: {reply_error}"
                 )
 
     async def on_message(self, message):
@@ -314,7 +312,7 @@ class GhostBot(commands.Bot):
             return
 
         # Handle mentions and pseudo-mentions
-        mentioned_ghosts = []
+        mentioned_entities = []
         is_direct_mention = False
 
         # Check for direct bot mention
@@ -324,17 +322,17 @@ class GhostBot(commands.Bot):
                 f"🔔 Direct bot mention from {message.author.display_name} in #{message.channel.name}"
             )
             # Look for specific entities in the message
-            mentioned_ghosts = self.ghost_group.find_ghost_by_mention(message.content)
-            if mentioned_ghosts:
+            mentioned_entities = self.entity_group.find_ghost_by_mention(message.content)
+            if mentioned_entities:
                 logger.debug(
-                    f"🎯 Specific entities requested: {', '.join(ghost.name for ghost in mentioned_ghosts)}"
+                    f"🎯 Specific entities requested: {', '.join(ghost.name for ghost in mentioned_entities)}"
                 )
 
         # Check for pseudo-mentions like "@tomas", "@anna"
-        mentioned_ghosts = self.ghost_group.find_ghost_by_mention(message.content)
-        if mentioned_ghosts:
+        mentioned_entities = self.entity_group.find_ghost_by_mention(message.content)
+        if mentioned_entities:
             logger.debug(
-                f"Pseudo-mentions detected for: {', '.join(ghost.name for ghost in mentioned_ghosts)} from {message.author.display_name}"
+                f"Pseudo-mentions detected for: {', '.join(ghost.name for ghost in mentioned_entities)} from {message.author.display_name}"
             )
 
         # Check for replies to entity messages
@@ -344,14 +342,14 @@ class GhostBot(commands.Bot):
                 referenced_message = await message.channel.fetch_message(message.reference.message_id)
                 
                 # Check if the referenced message was sent by an entity
-                ghost_handle = self.identify_ghost_from_message(referenced_message)
+                entity_handle = self.identify_entity_from_message(referenced_message)
                 # logger.info(f" Referenced message: {referenced_message.content} from {referenced_message.author.display_name!r}, entity handle: {ghost_handle!r}")
-                if ghost_handle:
-                    ghost = self.ghost_group.get(ghost_handle)
+                if entity_handle:
+                    ghost = self.entity_group.get(entity_handle)
                     if ghost:
                         # Add the replied-to entity to the list if not already present
-                        if ghost not in mentioned_ghosts:
-                            mentioned_ghosts.insert(0, ghost)
+                        if ghost not in mentioned_entities:
+                            mentioned_entities.insert(0, ghost)
                             logger.debug(
                                 f"💬 Reply detected to {ghost.name}'s message from {message.author.display_name}"
                             )
@@ -367,48 +365,48 @@ class GhostBot(commands.Bot):
             hasattr(message.author, "discriminator") and message.author.discriminator == "0000"):
             
             # This is an entity message - check if it mentions other entities
-            ghost_mentions = self.ghost_group.find_ghost_by_mention(message.content)
+            ghost_mentions = self.entity_group.find_ghost_by_mention(message.content)
             if ghost_mentions:
                 logger.debug(
                     f"Entity {message.author.name} is mentioning other entities: {', '.join(ghost.name for ghost in ghost_mentions)}"
                 )
                 # Add mentioned entities to the response list
                 for ghost in ghost_mentions:
-                    if ghost not in mentioned_ghosts:
-                        mentioned_ghosts.append(ghost)
+                    if ghost not in mentioned_entities:
+                        mentioned_entities.append(ghost)
 
         # Check if channel is stopped before processing any ghost mentions
         channel_state = self.get_channel_state(message.channel.id)
-        if mentioned_ghosts or is_direct_mention:
+        if mentioned_entities or is_direct_mention:
             # Only block if channel is stopped AND this is not a direct user mention
             if channel_state.is_stopped():
                 logger.info(f"Entity mentions blocked in #{message.channel.name} (channel stopped)")
-                await message.channel.send(shorten_str(f"**Dropping entity mentions ({', '.join(ghost.name for ghost in mentioned_ghosts)}) because entity activity is currently stopped in this channel**"))
+                await message.channel.send(shorten_str(f"**Dropping entity mentions ({', '.join(ghost.name for ghost in mentioned_entities)}) because entity activity is currently stopped in this channel**"))
                 return
             
             # Filter out ghosts that are currently in a chat (unless it's a direct user mention)
             if not self.is_direct_user_mention(message):
                 filtered_ghosts = []
-                for ghost in mentioned_ghosts:
+                for ghost in mentioned_entities:
                     if channel_state.is_in_chat(ghost.handle):
                         logger.info(f"🛑 Ghost {ghost.handle} blocked from mention (currently in chat)")
                     else:
                         filtered_ghosts.append(ghost)
-                mentioned_ghosts = filtered_ghosts
+                mentioned_entities = filtered_ghosts
             
             # If no specific entities selected and it's a direct mention, a random entity is summoned
-            if not mentioned_ghosts and is_direct_mention and len(self.ghost_group) > 0:
+            if not mentioned_entities and is_direct_mention and len(self.entity_group) > 0:
                 # For direct mentions, still allow ghosts in chat to respond
-                mentioned_ghosts = [random.choice(list(self.ghost_group.values()))]
+                mentioned_entities = [random.choice(list(self.entity_group.values()))]
                 logger.debug(
-                    f"🎲 No specific entities requested, using random: {mentioned_ghosts[0].name}"
+                    f"🎲 No specific entities requested, using random: {mentioned_entities[0].name}"
                 )
 
-            if mentioned_ghosts:
+            if mentioned_entities:
                 # Remove duplicates while preserving order
                 unique_ghosts = []
                 seen_ghosts = set()
-                for ghost in mentioned_ghosts:
+                for ghost in mentioned_entities:
                     if ghost.handle not in seen_ghosts:
                         unique_ghosts.append(ghost)
                         seen_ghosts.add(ghost.handle)
@@ -418,7 +416,7 @@ class GhostBot(commands.Bot):
                 )
                 
                 for ghost in unique_ghosts:
-                    await self.activate_ghost(ghost, message)
+                    await self.activate_entity(ghost, message)
             else:
                 logger.warning(
                     f"⚠️  Entity summon failed - no entities available for {message.author.display_name}"
@@ -426,7 +424,7 @@ class GhostBot(commands.Bot):
 
     async def cmd_list(self, ctx, *args):
         """List all loaded entities"""
-        if len(self.ghost_group) == 0:
+        if len(self.entity_group) == 0:
             await ctx.send(
                 "No entities are currently loaded! Check the bots directory."
             )
@@ -434,17 +432,17 @@ class GhostBot(commands.Bot):
 
         message = "**Loaded Entities:**\n\n"
 
-        for ghost_key, ghost in self.ghost_group:
+        for ghost_key, ghost in self.entity_group:
             message += f"**{ghost.name}** (`{ghost.handle}`) - {shorten_str(ghost.description, 50)}\n"
 
         await ctx.send(shorten_str(message))
 
     async def cmd_reload(self, ctx, *args):
         """Reload entity configurations from files"""
-        old_count = len(self.ghost_group)
+        old_count = len(self.entity_group)
 
-        self.ghost_group = GhostGroup.load_from_directory(self.ghost_path)
-        new_count = len(self.ghost_group)
+        self.entity_group = EntityGroup.load_from_directory(self.entity_path)
+        new_count = len(self.entity_group)
 
         if new_count > 0:
             await ctx.send(
@@ -460,7 +458,7 @@ class GhostBot(commands.Bot):
         webhook_status = "Enabled" if self.channel_webhooks else "Limited"
 
         message = "🎭 **Entity System Status**\n\n"
-        message += f"**Loaded Entities:** {len(self.ghost_group)}\n"
+        message += f"**Loaded Entities:** {len(self.entity_group)}\n"
         message += f"**Active Channels:** {len(self.channel_webhooks)}\n"
         message += f"**Webhooks:** {webhook_status}\n\n"
 
@@ -470,16 +468,16 @@ class GhostBot(commands.Bot):
             remaining_time = 30 - (time.time() - channel_state.last_stop_time)
             message += f"🛑 **This Channel:** Stopped ({remaining_time:.1f}s remaining)\n\n"
         else:
-            message += f"▶️ **This Channel:** Active\n\n"
+            message += "▶️ **This Channel:** Active\n\n"
         
         # Show chat participants if any
         if channel_state.chat_participants:
             message += f"🎭 **Active Chat:** {', '.join(channel_state.chat_participants)}\n\n"
 
-        if len(self.ghost_group) > 0:
+        if len(self.entity_group) > 0:
             message += "**Entity Models:**\n"
             model_counts = {}
-            for ghost in self.ghost_group.values():
+            for ghost in self.entity_group.values():
                 model_counts[ghost.model] = model_counts.get(ghost.model, 0) + 1
 
             for model, count in model_counts.items():
@@ -487,12 +485,12 @@ class GhostBot(commands.Bot):
 
             # Show entity-specific configurations
             custom_config_ghosts = []
-            for ghost in self.ghost_group.values():
+            for ghost in self.entity_group.values():
                 if ghost.base_url or ghost.api_key:
                     custom_config_ghosts.append(ghost)
             
             if custom_config_ghosts:
-                message += f"\n**Entities with Custom LLM Config:**\n"
+                message += "\n**Entities with Custom LLM Config:**\n"
                 for ghost in custom_config_ghosts:
                     config_info = []
                     if ghost.base_url:
@@ -501,9 +499,9 @@ class GhostBot(commands.Bot):
                         config_info.append("Custom API Key")
                     message += f"  • {ghost.name}: {', '.join(config_info)}\n"
             else:
-                message += f"\n**LLM Configuration:** All entities using .env settings\n"
+                message += "\n**LLM Configuration:** All entities using .env settings\n"
 
-            message += f"\n**Try:** `@{list(self.ghost_group.keys())[0]} hello there!`"
+            message += f"\n**Try:** `@{list(self.entity_group.keys())[0]} hello there!`"
         else:
             message += "⚠️ **No entities loaded!** Use `!reload-ghosts` to load them."
 
@@ -540,19 +538,19 @@ class GhostBot(commands.Bot):
     async def cmd_speak(self, ctx, *ghost_handles):
         """Make specific entities speak in sequence"""
         logger.info(f"Speaking with {ghost_handles!r}")
-        if len(self.ghost_group) == 0:
+        if len(self.entity_group) == 0:
             await ctx.send(shorten_str("❌ No entities loaded! Use `!reload` first."))
             return
 
         # filter for valid entity handles
-        handles = [handle for handle in ghost_handles if handle in self.ghost_group.keys()]
+        handles = [handle for handle in ghost_handles if handle in self.entity_group.keys()]
         if len(handles) != len(ghost_handles):
             await ctx.send(shorten_str(f"❌ Some invalid entity handles were provided: {', '.join(ghost_handles)}"))
             return
 
         # If no entities specified, use all available entities, randomize order
         if not handles:
-            handles = list(self.ghost_group.keys())
+            handles = list(self.entity_group.keys())
             random.shuffle(handles)
 
         logger.info(f"Speaking with {handles!r}")
@@ -560,7 +558,7 @@ class GhostBot(commands.Bot):
         # Find the entities
         ghosts_to_speak = []
         for handle in handles:
-            ghost = self.ghost_group.get(handle.lower())
+            ghost = self.entity_group.get(handle.lower())
             if ghost:
                 ghosts_to_speak.append(ghost)
             else:
@@ -579,7 +577,7 @@ class GhostBot(commands.Bot):
                 return
                 
             try:
-                await self.activate_ghost(ghost, ctx.message)
+                await self.activate_entity(ghost, ctx.message)
 
                 # Add random delay between responses (1-3 seconds)
                 if ghost != ghosts_to_speak[-1]:  # Don't delay after the last entity
@@ -589,10 +587,10 @@ class GhostBot(commands.Bot):
             except Exception as e:
                 await ctx.send(shorten_str(f"❌ **Error with {ghost.name}**: {str(e)}"))
 
-    async def cmd_ghost_chat(self, ctx, *args):
+    async def cmd_entity_chat(self, ctx, *args):
         """Start a conversation between multiple entities"""
         logger.info(f"Starting entity chat with {args!r}")
-        if len(self.ghost_group) < 2:
+        if len(self.entity_group) < 2:
             await ctx.send(shorten_str("❌ Need at least 2 entities for an entity chat! Use `!reload` to load more entities."))
             return
 
@@ -623,12 +621,12 @@ class GhostBot(commands.Bot):
 
         # If no entities specified, use all available entities
         if not ghost_handles:
-            ghost_handles = list(self.ghost_group.keys())
+            ghost_handles = list(self.entity_group.keys())
 
         # Validate entity handles
         valid_ghosts = []
         for handle in ghost_handles:
-            ghost = self.ghost_group.get(handle)
+            ghost = self.entity_group.get(handle)
             if ghost:
                 valid_ghosts.append(ghost)
             else:
@@ -676,7 +674,7 @@ class GhostBot(commands.Bot):
                 
                 try:
                     # Activate the entity using the existing infrastructure
-                    await self.activate_ghost(current_ghost, ctx.message)
+                    await self.activate_entity(current_ghost, ctx.message)
                     
                     # Add random delay between responses (2-10 seconds)
                     if turn < num_turns - 1:  # Don't delay after the last turn
@@ -731,7 +729,7 @@ class GhostBot(commands.Bot):
         normalized = ' '.join(normalized.split())
         return normalized.strip()
 
-    def identify_ghost_from_message(self, message) -> Optional[str]:
+    def identify_entity_from_message(self, message) -> Optional[str]:
         """
         Identify which entity sent a message by checking webhook properties
         
@@ -753,7 +751,7 @@ class GhostBot(commands.Bot):
             author_name_normalized = self._normalize_name(message.author.name)
             
             # Find the entity by name
-            for ghost_handle, ghost in self.ghost_group:
+            for ghost_handle, ghost in self.entity_group:
                 # Normalize the entity name for comparison
                 ghost_name_normalized = self._normalize_name(ghost.name)
                 # print(f"Entity: {ghost.name!r} -> {ghost_name_normalized!r}, {ghost.handle!r}, {ghost.discord_avatar!r} matching {message.author.name!r} -> {author_name_normalized!r}")

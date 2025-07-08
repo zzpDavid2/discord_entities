@@ -1,5 +1,5 @@
 [project]
-name = "ghosts"
+name = "discord_entities"
 version = "0.1.0"
 description = ""
 authors = [
@@ -14,4 +14,11 @@ dependencies = [
     "discord-py (>=2.5.2,<3.0.0)",
     "pydantic (>=2.11.7,<3.0.0)",
     "pyyaml (>=6.0,<7.0)"
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.16.1",
+    "ruff>=0.12.2",
+    "types-pyyaml>=6.0.12.20250516",
 ]

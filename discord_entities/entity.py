@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 from litellm import acompletion
-import litellm
 
 # Set up logging for this module
 logger = logging.getLogger(__name__)
@@ -15,7 +14,7 @@ SYSTEM_PROMPT = """
 """
 
 
-class Ghost(BaseModel):
+class Entity(BaseModel):
     """A digital entity with LLM capabilities"""
 
     name: str = Field(..., description="Display name of the entity")
@@ -297,7 +296,7 @@ class Ghost(BaseModel):
         return f"Entity(@{self.handle}, {self.name}, model={self.model})"
 
     @classmethod
-    def load_from_file(cls, file_path: Path) -> "Ghost":
+    def load_from_file(cls, file_path: Path) -> "Entity":
         """
         Load a single entity from a file
 

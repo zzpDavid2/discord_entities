@@ -1,23 +1,23 @@
 import logging
 from pathlib import Path
 from typing import Dict, Optional, List
-from .ghost import Ghost
+from .entity import Entity
 
 # Set up logging for this module
 logger = logging.getLogger(__name__)
 
 
-class GhostGroup:
+class EntityGroup:
     """A collection of entities that can be managed and operated on as a group"""
 
-    def __init__(self, ghosts: Dict[str, Ghost] = None):
+    def __init__(self, entities: Dict[str, Entity] = None):
         """
         Initialize an entity group
 
         Args:
             ghosts: Dictionary mapping handles to Ghost instances
         """
-        self.ghosts = ghosts or {}
+        self.ghosts = entities or {}
 
     def __len__(self) -> int:
         """Return the number of entities in the group"""
@@ -27,11 +27,11 @@ class GhostGroup:
         """Iterate over entity handles and instances"""
         return iter(self.ghosts.items())
 
-    def __getitem__(self, handle: str) -> Ghost:
+    def __getitem__(self, handle: str) -> Entity:
         """Get an entity by handle"""
         return self.ghosts[handle]
 
-    def get(self, handle: str, default: Ghost = None) -> Optional[Ghost]:
+    def get(self, handle: str, default: Entity = None) -> Optional[Entity]:
         """Get an entity by handle with default fallback"""
         return self.ghosts.get(handle, default)
 
@@ -47,19 +47,19 @@ class GhostGroup:
         """Return handle, entity pairs"""
         return self.ghosts.items()
 
-    def add_ghost(self, ghost: Ghost):
+    def add_ghost(self, ghost: Entity):
         """Add an entity to the group"""
         self.ghosts[ghost.handle] = ghost
         logger.info(f"✅ Added entity: {ghost.name} (handle: {ghost.handle}) to group")
 
-    def remove_ghost(self, handle: str) -> Optional[Ghost]:
+    def remove_ghost(self, handle: str) -> Optional[Entity]:
         """Remove an entity by handle"""
         ghost = self.ghosts.pop(handle, None)
         if ghost:
             logger.info(f"🗑️ Removed entity: {ghost.name} (handle: {handle}) from group")
         return ghost
 
-    def find_ghost_by_mention(self, message_content: str) -> List[Ghost]:
+    def find_ghost_by_mention(self, message_content: str) -> List[Entity]:
         """Find all entities being mentioned in the message"""
         import re
 
@@ -100,7 +100,7 @@ class GhostGroup:
         normalized = " ".join(normalized.split())
         return normalized.strip()
 
-    def get_ghost_by_name(self, name: str) -> Optional[Ghost]:
+    def get_ghost_by_name(self, name: str) -> Optional[Entity]:
         """
         Find an entity by their display name (case-insensitive)
 
@@ -121,7 +121,7 @@ class GhostGroup:
     @classmethod
     def load_from_directory(
         cls, directory: str, ignore_errors: bool = True
-    ) -> "GhostGroup":
+    ) -> "EntityGroup":
         """
         Load all entity configurations from a directory
 
@@ -165,7 +165,7 @@ class GhostGroup:
         # Load each entity
         for file_path in config_files:
             try:
-                ghost = Ghost.load_from_file(file_path)
+                ghost = Entity.load_from_file(file_path)
                 ghost_group.add_ghost(ghost)
             except ValueError as e:
                 if not ignore_errors:

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-LLM-powered Ghost Bot Runner
+LLM-powered Entity Bot Runner
 """
 
 import argparse
@@ -10,12 +10,12 @@ import sys
 
 from dotenv import load_dotenv
 
-from ghosts.bot import GhostBot
+from discord_entities.bot import EntityBot
 
-DEFAULT_GHOSTS_PATH = "ghost_definitions"
+DEFAULT_ENTITY_DIRECTORY = "entity_defs"
 
 
-def setup_logging(level: str, log_file: str = None):
+def setup_logging(level: str, log_file: str | None = None):
     """Set up logging configuration"""
 
     # Convert string level to logging constant
@@ -65,22 +65,22 @@ def setup_logging(level: str, log_file: str = None):
 def parse_arguments():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(
-        description="LLM-powered Ghost Bot System",
+        description="LLM-powered Entity Bot System",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Logging Examples:
-  python run_ghosts.py --debug                    # Enable debug logging
-  python run_ghosts.py --log-level INFO          # Set specific log level
-  python run_ghosts.py --log-file ghosts.log     # Log to file
-  python run_ghosts.py --debug --log-file debug.log  # Debug to file
+  python run_entities.py --debug                    # Enable debug logging
+  python run_entities.py --log-level INFO          # Set specific log level
+  python run_entities.py --log-file entities.log     # Log to file
+  python run_entities.py --debug --log-file debug.log  # Debug to file
 
 Message Context Examples:
-  python run_ghosts.py --message-limit 100       # More context (100 messages)
-  python run_ghosts.py -m 20                     # Less context (20 messages)
+  python run_entities.py --message-limit 100       # More context (100 messages)
+  python run_entities.py -m 20                     # Less context (20 messages)
 
-Ghost Configuration Examples:
-  python run_ghosts.py --ghost-path ./my_ghosts  # Load ghosts from custom directory
-  python run_ghosts.py -g ./test_ghosts          # Short form for ghost path
+Entity Configuration Examples:
+  python run_entities.py --entity-path ./my_entities  # Load entities from custom directory
+  python run_entities.py -g ./test_entities          # Short form for entity path
 
 Log Levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
         """,
@@ -122,10 +122,10 @@ Log Levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
     )
 
     parser.add_argument(
-        "--ghosts-path",
+        "--entities-path",
         "-g",
         type=str,
-        help=f"Path to directory containing ghost configurations (default: {DEFAULT_GHOSTS_PATH})",
+        help=f"Path to directory containing entity configurations (default: {DEFAULT_ENTITY_DIRECTORY})",
     )
 
     return parser.parse_args()
@@ -156,7 +156,7 @@ def main():
     # Load environment variables
     load_dotenv()
 
-    print("🎭 Starting LLM-Powered Ghost Bot System")
+    print("🎭 Starting LLM-Powered Entity Bot System")
     print("=" * 50)
 
     # Check for required environment variables
@@ -188,17 +188,17 @@ def main():
     if not has_llm_key:
         print("\n⚠️  Warning: No LLM API keys found!")
         print(
-            "   The ghosts will use fallback responses if they can't connect to LLM services."
+            "   The entities will use fallback responses if they can't connect to LLM services."
         )
         print("   Add API keys to .env file for full functionality:")
         print("   OPENAI_API_KEY=your_openai_key_here")
 
-    # Show ghost path
-    ghost_path = args.ghosts_path or os.path.join(
-        os.path.dirname(__file__), DEFAULT_GHOSTS_PATH
+    # Show entity path
+    entity_path = args.entities_path or os.path.join(
+        os.path.dirname(__file__), DEFAULT_ENTITY_DIRECTORY
     )
-    print(f"\n📁 Bot configurations will be loaded from: {ghost_path}")
-    print("🎭 Starting ghost system...")
+    print(f"\n📁 Bot configurations will be loaded from: {entity_path}")
+    print("🎭 Starting entity system...")
 
     # Log some helpful debug info
     logger = logging.getLogger(__name__)
@@ -207,22 +207,22 @@ def main():
 
     try:
         # Create and run the bot
-        logger.info("🚀 Creating ghost bot...")
-        bot = GhostBot(message_limit=args.message_limit, ghost_path=ghost_path)
+        logger.info("🚀 Creating entity bot...")
+        bot = EntityBot(message_limit=args.message_limit, entity_path=entity_path)
 
         logger.info("🤖 Starting Discord bot...")
         bot.run(token)
 
     except KeyboardInterrupt:
         logger.info("🛑 Received interrupt signal")
-        print("\n👻 All ghosts have returned to the spirit realm. Goodbye!")
+        print("\n👻 All entities have returned to the spirit realm. Goodbye!")
     except ImportError as e:
         logger.error(f"❌ Import error: {e}")
         print(f"❌ Import error: {e}")
         print("💡 Make sure to install dependencies: pip install -e .")
     except Exception as e:
         logger.error(f"❌ Unexpected error: {type(e).__name__}: {e}", exc_info=True)
-        print(f"❌ Error running ghost bot: {e}")
+        print(f"❌ Error running entity bot: {e}")
 
 
 if __name__ == "__main__":
