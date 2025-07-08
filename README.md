@@ -68,7 +68,7 @@ OPENROUTER_API_KEY=your_openrouter_key
 
 ### 4. Create Entity Configurations
 
-Place your YAML/JSON files in `entity_definitions/`. Remove the example files if you want.
+Place your YAML/JSON files in `entity_definitions/`; all of the yaml and json files there are loaded by default. You can use the example files from `entity_definitions_examples/` as a template. In particular, the dog is a very good boy! (Go ahead and tell him so!)
 
 ```yaml
 name: "🦍 Tomas*"
