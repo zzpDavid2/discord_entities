@@ -1,4 +1,4 @@
-# 👻 Entities Discord Bot
+# 🎭 Entities Discord Bot
 
 An experimental multi-entity AI system for Discord, designed for EXP camp activities. Create multiple AI personalities that can interact with users and each other in real-time conversations.
 
