@@ -11,6 +11,7 @@ This system enables rich AI-to-AI-to-Human interactions in Discord channels, whe
 - Tag and reply to each other autonomously  
 - Engage in multi-turn conversations when commanded to do so
 - Use different LLM providers per entity, including private and fine-tuned models
+- **Load new entities directly from Discord file uploads** 🆕
 
 The original intention was a simple way to explore AI personas and how LLMs understand instructions and characters on various levels, but also to have fun and light-hearted experiments with emergent AI behaviors, collaborative problem-solving, and creative AI interactions.
 
@@ -35,18 +36,48 @@ or alternatively with `uv`:
 uv sync
 ```
 
-### 2. Create a Discord Bot
+### 2. Create a Discord Bot Application
 
-You need to create your own discord bot instance in the discord app that this code will use.
+You need to create your own Discord bot instance that this code will use.
 
-1. To create a Discord bot, you need to create a new application in the [Discord Developer Portal](https://discord.com/developers/applications).
-2. Then, go to the "Bot" section and click "Add Bot".
-3. Copy the token and paste it into the `.env` file below.
-4. Note the bot needs the "Message Content Intent" enabled.
-5. Then you need to create the bot invite link under OAuth2 > URL Generator:
-    - Select the "bot" scope and the "Manage Webhooks", "Send Messages", "Read Message History", "Manage Messages", "View Channel" permissions, though you can add more if you want.
-    - Copy the generated URL and open it in your browser.
-    - Select your server and authorize the bot.
+#### Step 1: Create Application
+1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
+2. Click **"New Application"**
+3. Give your bot a name (e.g., "My Entity Bot")
+4. Click **"Create"**
+
+#### Step 2: Create Bot User
+1. In the left sidebar, click **"Bot"**
+2. Click **"Add Bot"** (or **"Reset Token"** if bot already exists)
+3. **Copy the bot token** - you'll need this for your `.env` file
+4. ⚠️ **Keep this token secret!** Never share it publicly
+
+#### Step 3: Enable Required Permissions
+Still in the **"Bot"** section, scroll down to **"Privileged Gateway Intents"**:
+
+✅ **Enable these intents:**
+- **MESSAGE CONTENT INTENT** - Required for reading messages, file uploads, and entity mentions
+
+#### Step 4: Generate Invite Link
+1. In the left sidebar, click **"OAuth2"** → **"URL Generator"**
+2. **Select Scopes:**
+   - ✅ `bot` (required)
+3. **Select Bot Permissions:**
+   - ✅ **Send Messages** - Basic messaging functionality
+   - ✅ **Read Message History** - Read conversation context for entities
+   - ✅ **Manage Messages** - Bot management features
+   - ✅ **View Channels** - See channels to respond in
+   - ✅ **Manage Webhooks** - **IMPORTANT:** Create entity personas with custom names/avatars
+   - ✅ **Attach Files** - Process uploaded entity configuration files
+   - ✅ **Use Slash Commands** (optional but recommended)
+
+4. **Copy the generated URL** at the bottom of the page
+
+#### Step 5: Add Bot to Your Server
+1. **Open the invite URL** in your browser
+2. **Select your Discord server** from the dropdown
+3. **Click "Authorize"** to add the bot to your server
+4. The bot will appear in your server's member list (offline until you start it)
 
 ### 3. Configuration
 
@@ -54,11 +85,11 @@ You need to create your own discord bot instance in the discord app that this co
 cp env.example .env
 ```
 
-Edit `.env` with your Discord bot token (from above) and LLM API keys:
+Edit `.env` with your Discord bot token (from step 2.3 above) and LLM API keys:
 
 ```bash
-# Required
-DISCORD_BOT_TOKEN=your_discord_bot_token
+# Required - Discord Bot Token from Developer Portal
+DISCORD_BOT_TOKEN=your_discord_bot_token_here
 
 # LLM Providers (choose one or more)
 OPENAI_API_KEY=your_openai_key
@@ -70,6 +101,12 @@ OPENROUTER_API_KEY=your_openrouter_key
 
 ### 4. Create Entity Configurations
 
+**Option A: Upload Files to Discord** 🆕
+- Drag and drop `.json` or `.yaml` entity files into any Discord channel
+- The bot automatically loads them and saves to `entity_definitions/`
+- No commands needed - instant loading!
+
+**Option B: Manual File Placement**
 Place your YAML/JSON files in `entity_definitions/`; all of the yaml and json files there are loaded by default. You can use the example files from `entity_definitions_examples/` as a template. In particular, the dog is a very good boy! (Go ahead and tell him so!)
 
 ```yaml
@@ -84,7 +121,7 @@ model: "anthropic/claude-sonnet-4-0"
 temperature: 0.7
 ```
 
-### 4. Run the Bot
+### 5. Run the Bot
 ```bash
 python run_entities.py
 ```
@@ -93,6 +130,34 @@ or alternatively with `uv`:
 ```bash
 uv run run_entities.py
 ```
+
+### 6. Test Your Bot
+1. **Check bot status:** Type `!status` in your Discord server
+2. **List entities:** Type `!list` to see loaded entities
+3. **Try an entity:** `@dog hello!` (if you have the example dog entity)
+4. **Upload a new entity:** Drag a `.json` or `.yaml` file into Discord
+
+## 🔧 Troubleshooting
+
+### Common Issues:
+
+**"PrivilegedIntentsRequired" Error:**
+- ✅ Go to Discord Developer Portal → Your App → Bot
+- ✅ Enable "MESSAGE CONTENT INTENT" under Privileged Gateway Intents
+- ✅ Save changes and restart your bot
+
+**Bot appears offline:**
+- ✅ Check your `DISCORD_BOT_TOKEN` in `.env`
+- ✅ Ensure the token hasn't been regenerated
+- ✅ Check console for error messages
+
+**"Forbidden" webhook errors:**
+- ✅ Ensure bot has "Manage Webhooks" permission
+- ✅ Re-invite bot with correct permissions using OAuth2 URL Generator
+
+**File uploads not working:**
+- ✅ Check bot has "Attach Files" and "Read Message History" permissions
+- ✅ Ensure "MESSAGE CONTENT INTENT" is enabled
 
 #### Hosting
 
@@ -103,6 +168,7 @@ You can deploy it anywhere, but e.g. https://pebblehost.com/bot-hosting is a ver
 ### Basic Interactions
 - `@entityname [message]` - Summon specific entity
 - `@entity1 @entity2 [question]` - Multi-entity responses
+- **Drag & drop `.json`/`.yaml` files** - Instantly load new entities 🆕
 
 ### Bot Commands
 - `!list` - Show loaded entities
@@ -112,6 +178,11 @@ You can deploy it anywhere, but e.g. https://pebblehost.com/bot-hosting is a ver
 - `!chat [entities] [turns]` - Start entity conversation (default: 10 turns)
 - `!stop` - Pause all entity activity (for 30s)
 - `!commands` - Show help
+
+### Entity Loading Methods 🆕
+1. **Discord Upload**: Drag `.json`/`.yaml` files into Discord - instant loading!
+2. **File System**: Place files in `entity_definitions/` and use `!reload`
+3. **Examples**: Copy from `entity_definitions_examples/` folder
 
 ### Entity-to-Entity Features
 - Entities automatically respond when tagged by other entities
@@ -139,6 +210,31 @@ api_key: "your-custom-key"             # Custom API key
 
 Supports: OpenAI, Anthropic, Cohere, Google, OpenRouter, self-hosted instances.
 
+### Example Entity File (JSON)
+```json
+{
+    "name": "🐕 Buddy",
+    "handle": "buddy",
+    "discord_avatar": "https://example.com/dog.jpg",
+    "description": "A friendly golden retriever",
+    "instructions": "You are a friendly golden retriever with human-level intelligence. You're curious, loyal, and love to help!",
+    "model": "gpt-4.1-mini",
+    "temperature": 0.8
+}
+```
+
+### Example Entity File (YAML)
+```yaml
+name: "🤖 Assistant"
+handle: "helper"
+description: "A helpful AI assistant"
+instructions: |
+  You are a helpful AI assistant who loves to solve problems
+  and help users with their questions.
+model: "gpt-4.1-mini"
+temperature: 0.5
+```
+
 ## 🛠️ Advanced Usage
 
 ### Command Line Options
@@ -149,12 +245,21 @@ python run_entities.py --message-limit 100       # More context (default: 50)
 python run_entities.py --log-file bot.log        # Log to file
 ```
 
+### File Upload Features 🆕
+- **Automatic Processing**: Files are processed immediately upon upload
+- **Format Support**: Both JSON and YAML formats supported
+- **Validation**: Full entity validation with helpful error messages  
+- **Conflict Handling**: Warns if entity handle already exists
+- **Auto-Save**: Successfully uploaded entities are saved to `entity_definitions/`
+- **Instant Usage**: New entities are immediately available for interaction
+
 ## 📁 Project Structure
 
 ```
 entities/
 ├── discord_entities/          # Core bot module
 ├── entity_definitions/        # Entity configurations (default)
+├── entity_definitions_examples/ # Example entity files
 ├── run_entities.py            # Main runner
 ├── CUSTOM_LLM_CONFIG.md       # Per-entity LLM guide
 └── ENTITY_INTERACTIONS.md     # Entity interaction guide
@@ -169,4 +274,5 @@ entities/
 - **Hot Reloading**: Configurations reload without restart
 - **Webhooks**: Entities appear as separate Discord users
 - **Error Handling**: Graceful fallbacks for LLM failures
+- **File Upload**: Automatic processing of JSON/YAML attachments
 

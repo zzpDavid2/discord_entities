@@ -2,12 +2,18 @@ import asyncio
 import logging
 import random
 import time
+import json
+import yaml
+import tempfile
+import aiohttp
+from pathlib import Path
 from typing import Dict, List, Optional
 
 import discord
 from discord.ext import commands
 
 from .entity_group import EntityGroup
+from .entity import Entity
 from .utils import shorten_str
 
 # Set up logging for this module
@@ -304,6 +310,12 @@ class EntityBot(commands.Bot):
         if message.author.bot and not (hasattr(message, "webhook_id") and message.webhook_id):
             return
 
+        # Check for file uploads first (only from non-bot users)
+        if not message.author.bot and message.attachments:
+            file_processed = await self.handle_file_upload(message)
+            if file_processed:
+                return  # Don't process as regular message if files were handled
+
         # Process commands first (but only for non-entity messages)
         if message.content.startswith(self.command_prefix):
             # Only process commands from non-entity messages
@@ -520,6 +532,12 @@ class EntityBot(commands.Bot):
         message += "• `!speak entity1 entity2 ...` - Make specific entities speak in sequence\n"
         message += "• `!chat [entity1 entity2 ...] [number]` - Start a conversation between entities (optional: specify number of turns)\n\n"
 
+        message += "**Entity Loading:** 🆕\n"
+        message += "• **Drag & drop `.json` or `.yaml` files** - Instantly load new entities!\n"
+        message += "• Files are automatically processed and saved to `entity_definitions/`\n"
+        message += "• Supports both JSON and YAML formats\n"
+        message += "• New entities are immediately available for use\n\n"
+
         message += "**Entity-to-Entity Features:**\n"
         message += "• Entities can tag each other with @entityname\n"
         message += "• Entities automatically respond when tagged by other entities\n"
@@ -528,10 +546,15 @@ class EntityBot(commands.Bot):
 
         message += "**Management Commands:**\n"
         message += "• `!list` - List all loaded entities\n"
-        message += "• `!reload` - Reload entity configurations\n"
+        message += "• `!reload` - Reload entity configurations from files\n"
         message += "• `!status` - Show system status\n"
         message += "• `!stop` - Stop all entity activity in this channel for 30 seconds\n"
-        message += "• `!commands` - Show this help message\n"
+        message += "• `!commands` - Show this help message\n\n"
+
+        message += "**Quick Start:**\n"
+        message += "• Try uploading an entity file to get started!\n"
+        message += "• Use example files from `entity_definitions_examples/`\n"
+        message += "• Required fields: `name`, `handle`, `description`, `instructions`\n"
 
         await ctx.send(shorten_str(message))
 
@@ -759,3 +782,112 @@ class EntityBot(commands.Bot):
                     return entity_handle
                     
         return None
+
+    async def handle_file_upload(self, message: discord.Message) -> bool:
+        """
+        Handle file uploads for entity configuration
+        
+        Args:
+            message: Discord message with attachments
+            
+        Returns:
+            True if file was processed, False otherwise
+        """
+        if not message.attachments:
+            return False
+            
+        for attachment in message.attachments:
+            # Check if it's a JSON or YAML file
+            file_extension = Path(attachment.filename).suffix.lower()
+            if file_extension not in ['.json', '.yaml', '.yml']:
+                continue
+                
+            logger.info(f"📎 Processing entity file upload: {attachment.filename} from {message.author.display_name}")
+            
+            try:
+                # Download the file content
+                async with aiohttp.ClientSession() as session:
+                    async with session.get(attachment.url) as response:
+                        if response.status != 200:
+                            await message.reply(f"❌ **Failed to download file**: {attachment.filename}")
+                            continue
+                            
+                        file_content = await response.read()
+                
+                # Parse the file content
+                try:
+                    if file_extension == '.json':
+                        entity_data = json.loads(file_content.decode('utf-8'))
+                        logger.debug(f"🔧 Parsed JSON data from {attachment.filename}")
+                    elif file_extension in ['.yaml', '.yml']:
+                        entity_data = yaml.safe_load(file_content.decode('utf-8'))
+                        logger.debug(f"🔧 Parsed YAML data from {attachment.filename}")
+                except (json.JSONDecodeError, yaml.YAMLError) as e:
+                    await message.reply(f"❌ **Invalid {file_extension[1:].upper()} format** in {attachment.filename}: {str(e)}")
+                    continue
+                
+                # Validate and create Entity instance
+                try:
+                    entity = Entity(**entity_data)
+                    logger.debug(f"✅ Created entity instance from upload: {entity.name}")
+                    
+                    # Check if entity with this handle already exists
+                    if entity.handle in self.entity_group.keys():
+                        await message.reply(
+                            f"⚠️ **Entity with handle `{entity.handle}` already exists!**\n"
+                            f"Current entity: **{self.entity_group.get(entity.handle).name}**\n"
+                            f"Uploaded entity: **{entity.name}**\n\n"
+                            f"The uploaded entity will replace the existing one. Use `!reload` to revert to file-based entities."
+                        )
+                    
+                    # Add entity to the group
+                    self.entity_group.add_entity(entity)
+                    
+                    # Save the entity to the entity_definitions directory
+                    entity_file_path = Path(self.entity_path) / f"{entity.handle}{file_extension}"
+                    try:
+                        with open(entity_file_path, 'w', encoding='utf-8') as f:
+                            if file_extension == '.json':
+                                json.dump(entity_data, f, indent=2, ensure_ascii=False)
+                            else:  # YAML
+                                yaml.dump(entity_data, f, default_flow_style=False, allow_unicode=True, indent=2)
+                        
+                        logger.info(f"💾 Saved entity {entity.name} to {entity_file_path}")
+                        
+                        await message.reply(
+                            f"✅ **Entity loaded successfully!**\n\n"
+                            f"**Name:** {entity.name}\n"
+                            f"**Handle:** `{entity.handle}`\n"
+                            f"**Model:** {entity.model}\n"
+                            f"**Description:** {shorten_str(entity.description, 100)}\n\n"
+                            f"💾 **Saved to:** `{entity_file_path.name}`\n"
+                            f"🎭 **Try mentioning:** `@{entity.handle} hello!`"
+                        )
+                        
+                    except Exception as save_error:
+                        # Entity is loaded but not saved to disk
+                        logger.warning(f"⚠️ Entity {entity.name} loaded but could not be saved: {save_error}")
+                        await message.reply(
+                            f"⚠️ **Entity loaded but not saved to disk!**\n\n"
+                            f"**Name:** {entity.name}\n"
+                            f"**Handle:** `{entity.handle}`\n"
+                            f"**Model:** {entity.model}\n\n"
+                            f"The entity is available for this session but will be lost on restart.\n"
+                            f"Save error: {str(save_error)[:100]}"
+                        )
+                    
+                except Exception as entity_error:
+                    await message.reply(
+                        f"❌ **Invalid entity configuration** in {attachment.filename}:\n"
+                        f"```\n{str(entity_error)[:500]}\n```\n\n"
+                        f"Please check the file format and required fields."
+                    )
+                    logger.error(f"❌ Entity validation failed for {attachment.filename}: {entity_error}")
+                    continue
+                    
+            except Exception as e:
+                await message.reply(f"❌ **Error processing file** {attachment.filename}: {str(e)[:100]}")
+                logger.error(f"❌ File processing error for {attachment.filename}: {e}", exc_info=True)
+                continue
+                
+        return True
