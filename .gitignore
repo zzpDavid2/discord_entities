@@ -6,3 +6,12 @@ node_modules/
 .uv/
 .ruff_cache/
 .mypy_cache/
+
+# Entity configuration files (user-specific)
+entity_definitions/*.yaml
+entity_definitions/*.yml
+entity_definitions/*.json
+
+# Keep the directory structure and examples
+!entity_definitions/.keep
+!entity_definitions_examples/
