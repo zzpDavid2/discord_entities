@@ -249,30 +249,67 @@ python run_entities.py --log-file bot.log        # Log to file
 - **Automatic Processing**: Files are processed immediately upon upload
 - **Format Support**: Both JSON and YAML formats supported
 - **Validation**: Full entity validation with helpful error messages  
-- **Conflict Handling**: Warns if entity handle already exists
+- **Smart Priority System**: Uploaded files take priority over manual files (see below)
 - **Auto-Save**: Successfully uploaded entities are saved to `entity_definitions/`
 - **Instant Usage**: New entities are immediately available for interaction
 
-## 📁 Project Structure
+### Entity File Priority System 🔧
 
+The bot uses a sophisticated priority system to handle multiple entity files with the same handle:
+
+#### **Priority Rules:**
+1. **Generated Files** (uploaded via Discord) have **higher priority** than manual files
+2. **Generated files** follow the naming pattern: `{handle}.{extension}` (e.g., `mybot.json`, `assistant.yaml`)
+3. **Manual files** can have any name but contain the same handle in their configuration
+
+#### **Examples:**
+
+**Scenario 1: Upload Priority**
 ```
-entities/
-├── discord_entities/          # Core bot module
-├── entity_definitions/        # Entity configurations (default)
-├── entity_definitions_examples/ # Example entity files
-├── run_entities.py            # Main runner
-├── CUSTOM_LLM_CONFIG.md       # Per-entity LLM guide
-└── ENTITY_INTERACTIONS.md     # Entity interaction guide
+Files in entity_definitions/:
+- Custom-Bot.yaml (handle: "mybot", manual file)
+- mybot.json (handle: "mybot", generated file)
+
+Result: mybot.json wins (generated file priority)
+Active entity: Configuration from mybot.json
 ```
 
-## 🔧 For Developers
+**Scenario 2: Manual File Preservation**
+```
+Files in entity_definitions/:
+- Special-Assistant.yaml (handle: "helper", manual file)
 
-- **Framework**: discord.py + litellm + pydantic
-- **Python**: 3.12+ required
-- **Entity Module**: `discord_entities.entity.Entity`
-- **Bot Class**: `discord_entities.bot.EntityBot`
-- **Hot Reloading**: Configurations reload without restart
-- **Webhooks**: Entities appear as separate Discord users
-- **Error Handling**: Graceful fallbacks for LLM failures
-- **File Upload**: Automatic processing of JSON/YAML attachments
+Upload: helper.json via Discord
+Result: helper.json takes priority, Special-Assistant.yaml preserved
+Active entity: Configuration from helper.json (uploaded)
+```
+
+**Scenario 3: Multiple Manual Files**
+```
+Files in entity_definitions/:
+- Bot-A.yaml (handle: "test", manual file)
+- Bot-B.json (handle: "test", manual file)
+
+Result: Bot-B.json wins (alphabetical order)
+Active entity: Configuration from Bot-B.json
+```
+
+#### **Why This System?**
+- **Preserves manual work**: Your custom-named files are never deleted
+- **Upload priority**: Recent uploads always take precedence
+- **Predictable behavior**: Clear rules for conflict resolution
+- **Developer friendly**: Manual files coexist with uploaded files
+
+#### **Logging Output:**
+The bot logs all priority decisions:
+```
+🔄 Handle 'mybot': 'New Bot' from mybot.json replaces 'Old Bot' from Custom-Bot.yaml (generated file takes priority over manual file)
+🛡️ Handle 'helper': keeping 'AI Helper' from helper.json, ignoring 'Manual Helper' from Special-Helper.yaml (keeping generated file over manual file)
+```
+
+#### **Best Practices:**
+1. **Use descriptive filenames** for manual entities (e.g., `Special-Character.yaml`)
+2. **Let uploads handle simple entities** (they'll be saved as `handle.extension`)
+3. **Check logs** after restart to see which entities won conflicts
+4. **Use `!reload`** to see priority resolution in real-time
 

@@ -831,16 +831,45 @@ class EntityBot(commands.Bot):
                     entity = Entity(**entity_data)
                     logger.debug(f"✅ Created entity instance from upload: {entity.name}")
                     
-                    # Check if entity with this handle already exists
-                    if entity.handle in self.entity_group.keys():
-                        await message.reply(
-                            f"⚠️ **Entity with handle `{entity.handle}` already exists!**\n"
-                            f"Current entity: **{self.entity_group.get(entity.handle).name}**\n"
-                            f"Uploaded entity: **{entity.name}**\n\n"
-                            f"The uploaded entity will replace the existing one. Use `!reload` to revert to file-based entities."
-                        )
+                    # Check for existing files with the same handle but different extensions
+                    entity_path = Path(self.entity_path)
+                    existing_files = []
+                    for ext in ['.json', '.yaml', '.yml']:
+                        potential_file = entity_path / f"{entity.handle}{ext}"
+                        if potential_file.exists():
+                            existing_files.append(potential_file)
                     
-                    # Add entity to the group
+                    # Check if entity with this handle already exists in memory
+                    memory_conflict = entity.handle in self.entity_group.keys()
+                    
+                    if existing_files or memory_conflict:
+                        conflict_msg = f"⚠️ **Entity with handle `{entity.handle}` already exists!**\n"
+                        
+                        if memory_conflict:
+                            existing_entity = self.entity_group.get(entity.handle)
+                            conflict_msg += f"Current entity: **{existing_entity.name}**\n"
+                        
+                        conflict_msg += f"Uploaded entity: **{entity.name}**\n"
+                        
+                        if existing_files:
+                            conflict_msg += f"Existing generated files: {', '.join(f.name for f in existing_files)}\n"
+                        
+                        conflict_msg += f"\nThe uploaded entity will take priority over any existing entities with the same handle.\n"
+                        conflict_msg += f"Manual files (with different names) will be preserved but have lower priority.\n"
+                        
+                        await message.reply(conflict_msg)
+                    
+                    # Only remove existing generated files with the same handle but different extensions
+                    # This preserves manual files while preventing duplicate generated files
+                    for existing_file in existing_files:
+                        if existing_file.suffix.lower() != file_extension:
+                            try:
+                                existing_file.unlink()
+                                logger.info(f"🗑️ Removed conflicting generated file: {existing_file.name}")
+                            except Exception as remove_error:
+                                logger.warning(f"⚠️ Could not remove conflicting file {existing_file.name}: {remove_error}")
+                    
+                    # Add entity to the group (will replace any existing entity with same handle)
                     self.entity_group.add_entity(entity)
                     
                     # Save the entity to the entity_definitions directory
@@ -854,15 +883,23 @@ class EntityBot(commands.Bot):
                         
                         logger.info(f"💾 Saved entity {entity.name} to {entity_file_path}")
                         
-                        await message.reply(
+                        success_msg = (
                             f"✅ **Entity loaded successfully!**\n\n"
                             f"**Name:** {entity.name}\n"
                             f"**Handle:** `{entity.handle}`\n"
                             f"**Model:** {entity.model}\n"
                             f"**Description:** {shorten_str(entity.description, 100)}\n\n"
                             f"💾 **Saved to:** `{entity_file_path.name}`\n"
-                            f"🎭 **Try mentioning:** `@{entity.handle} hello!`"
                         )
+                        
+                        if existing_files:
+                            removed_files = [f.name for f in existing_files if f.suffix.lower() != file_extension]
+                            if removed_files:
+                                success_msg += f"🗑️ **Removed:** {', '.join(removed_files)}\n"
+                        
+                        success_msg += f"🎭 **Try mentioning:** `@{entity.handle} hello!`"
+                        
+                        await message.reply(success_msg)
                         
                     except Exception as save_error:
                         # Entity is loaded but not saved to disk

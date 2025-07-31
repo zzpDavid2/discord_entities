@@ -162,11 +162,79 @@ class EntityGroup:
                 raise ValueError(error_msg)
             return entity_group
 
-        # Load each entity
+        # Sort files for consistent loading order
+        config_files.sort()
+        
+        # Track handle conflicts for logging
+        handle_conflicts = {}
+        
+        # First pass: Load all entities and track handles
+        entities_by_handle = {}
+        file_priority = {}  # handle -> (file_path, is_generated)
+        
         for file_path in config_files:
             try:
                 entity = Entity.load_from_file(file_path)
-                entity_group.add_entity(entity)
+                
+                # Determine if this is a generated file (filename matches handle pattern)
+                file_stem = file_path.stem.lower()  # filename without extension
+                is_generated_file = file_stem == entity.handle.lower()
+                
+                handle = entity.handle
+                
+                # Track file priority: generated files (uploaded) take priority over manual files
+                if handle not in file_priority:
+                    # First file for this handle
+                    entities_by_handle[handle] = entity
+                    file_priority[handle] = (file_path, is_generated_file)
+                else:
+                    # Handle conflict - determine priority
+                    existing_file, existing_is_generated = file_priority[handle]
+                    
+                    # Priority rules:
+                    # 1. Generated files (uploaded) beat manual files
+                    # 2. If both are same type, later alphabetically wins (consistent behavior)
+                    should_replace = False
+                    
+                    if is_generated_file and not existing_is_generated:
+                        # New file is generated, existing is manual -> replace
+                        should_replace = True
+                        reason = f"generated file takes priority over manual file"
+                    elif not is_generated_file and existing_is_generated:
+                        # New file is manual, existing is generated -> keep existing
+                        should_replace = False
+                        reason = f"keeping generated file over manual file"
+                    else:
+                        # Both are same type -> alphabetical order wins (later file)
+                        should_replace = True
+                        reason = f"later file in alphabetical order"
+                    
+                    # Log the conflict
+                    if handle not in handle_conflicts:
+                        handle_conflicts[handle] = []
+                    
+                    existing_entity = entities_by_handle[handle]
+                    conflict_info = {
+                        'existing': {'entity': existing_entity, 'file': existing_file, 'generated': existing_is_generated},
+                        'new': {'entity': entity, 'file': file_path, 'generated': is_generated_file},
+                        'winner': 'new' if should_replace else 'existing',
+                        'reason': reason
+                    }
+                    handle_conflicts[handle].append(conflict_info)
+                    
+                    if should_replace:
+                        entities_by_handle[handle] = entity
+                        file_priority[handle] = (file_path, is_generated_file)
+                        logger.info(
+                            f"🔄 Handle '{handle}': '{entity.name}' from {file_path.name} "
+                            f"replaces '{existing_entity.name}' from {existing_file.name} ({reason})"
+                        )
+                    else:
+                        logger.info(
+                            f"🛡️ Handle '{handle}': keeping '{existing_entity.name}' from {existing_file.name}, "
+                            f"ignoring '{entity.name}' from {file_path.name} ({reason})"
+                        )
+                
             except ValueError as e:
                 if not ignore_errors:
                     raise ValueError(
@@ -175,6 +243,22 @@ class EntityGroup:
                 logger.error(
                     f"⚠️  Skipping failed entity load from {file_path}: {str(e)}",
                     exc_info=True,
+                )
+
+        # Add final entities to the group
+        for handle, entity in entities_by_handle.items():
+            entity_group.add_entity(entity)
+
+        # Log summary of conflicts if any occurred
+        if handle_conflicts:
+            logger.warning(f"⚠️  Found handle conflicts for {len(handle_conflicts)} entities during loading:")
+            for handle, conflicts in handle_conflicts.items():
+                final_winner = conflicts[-1]  # Last conflict shows final winner
+                winner_info = final_winner['new'] if final_winner['winner'] == 'new' else final_winner['existing']
+                file_type = "generated" if winner_info['generated'] else "manual"
+                logger.warning(
+                    f"  Handle '{handle}': {winner_info['entity'].name} from {winner_info['file'].name} "
+                    f"({file_type}) - {final_winner['reason']}"
                 )
 
         if len(entity_group) == 0 and not ignore_errors:
